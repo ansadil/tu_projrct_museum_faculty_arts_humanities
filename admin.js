@@ -17,6 +17,7 @@ const el = {
   itemDescription: document.getElementById("itemDescription"),
   itemUrls: document.getElementById("itemUrls"),
   itemImages: document.getElementById("itemImages"),
+  itemFunctionalTags: document.getElementById("itemFunctionalTags"),
   itemFields: document.getElementById("itemFields"),
   itemXlsx: document.getElementById("itemXlsx"),
   newItemBtn: document.getElementById("newItemBtn"),
@@ -55,6 +56,7 @@ function loadForm(item) {
   el.itemDescription.value = item.description || "";
   el.itemUrls.value = (item.urls || []).join("\n");
   el.itemImages.value = (item.images || []).join("\n");
+  el.itemFunctionalTags.value = (item.functionalTags || []).join("\n");
   el.itemFields.value = JSON.stringify(item.fields || {}, null, 2);
   el.itemXlsx.value = JSON.stringify(item.xlsx || {}, null, 2);
 }
@@ -116,6 +118,10 @@ function collectFormData() {
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean);
+  const functionalTags = el.itemFunctionalTags.value
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
 
   return {
     id,
@@ -125,6 +131,7 @@ function collectFormData() {
     primaryUrl: el.itemPrimaryUrl.value.trim(),
     urls,
     images,
+    functionalTags,
     fields: safeParseObject(el.itemFields.value, "الحقول"),
     xlsx: safeParseObject(el.itemXlsx.value, "بيانات Excel"),
     source: "admin",
@@ -170,6 +177,7 @@ function createNewItem() {
     fields: {},
     urls: [],
     images: [],
+    functionalTags: [],
     source: "admin",
     primaryUrl: "",
     primaryImage: "",

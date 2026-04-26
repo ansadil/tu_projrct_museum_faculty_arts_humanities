@@ -8,9 +8,34 @@ const ADMIN_STORAGE_KEY = "museum_items_override_v1";
 const itemsList = document.getElementById("itemsList");
 const detailsPanel = document.getElementById("detailsPanel");
 const searchInput = document.getElementById("searchInput");
+const generalClassificationFilter = document.getElementById("generalClassificationFilter");
+const sourceRegionFilter = document.getElementById("sourceRegionFilter");
 const classificationFilter = document.getElementById("classificationFilter");
 const timePeriodFilter = document.getElementById("timePeriodFilter");
 const resultCount = document.getElementById("resultCount");
+const resetFiltersBtn = document.getElementById("resetFiltersBtn");
+const BASE_GENERAL_CATEGORIES = [
+  "فخريات",
+  "عملات",
+  "منقوشات",
+  "مخطوطات",
+  "ملبوسات",
+  "أدوات منزلية",
+  "أدوات زينة",
+  "أسلحة",
+  "أجهزة",
+];
+const BASE_SOURCE_REGIONS = [
+  "الجزيرة العربية",
+  "بلاد الشام",
+  "مصر",
+  "العراق",
+  "اليمن",
+  "شمال أفريقيا",
+  "الأناضول",
+  "أوروبا",
+  "غير محدد",
+];
 
 function resolveAssetPath(assetPath = "") {
   if (!assetPath) return "";
@@ -28,16 +53,28 @@ function escapeHtml(value = "") {
 }
 
 function filterItems(query) {
-  const selectedClass = (classificationFilter?.value || "").trim().toLowerCase();
-  const selectedTimePeriod = (timePeriodFilter?.value || "").trim().toLowerCase();
+  const selectedGeneralClass = (generalClassificationFilter?.value || "").trim();
+  const selectedSourceRegion = (sourceRegionFilter?.value || "").trim();
+  const selectedClass = (classificationFilter?.value || "").trim();
+  const selectedTimePeriod = (timePeriodFilter?.value || "").trim();
   const q = query.trim().toLowerCase();
   return state.items.filter((item) => {
-    const itemClassValue = getFunctionalClassification(item).toLowerCase();
-    if (selectedClass && itemClassValue !== selectedClass) {
+    const itemTags = getFunctionalTags(item).map((tag) => normalizeTagValue(tag));
+    const itemGeneralClasses = getItemGeneralCategories(item)
+      .map((gc) => normalizeTagValue(gc))
+      .filter(Boolean);
+    if (selectedGeneralClass && !itemGeneralClasses.includes(selectedGeneralClass)) {
       return false;
     }
-    const itemTimePeriodValue = getTimePeriod(item).toLowerCase();
-    if (selectedTimePeriod && itemTimePeriodValue !== selectedTimePeriod) {
+    const itemSourceRegions = getItemSourceRegions(item).map((r) => normalizeTagValue(r));
+    if (selectedSourceRegion && !itemSourceRegions.includes(selectedSourceRegion)) {
+      return false;
+    }
+    if (selectedClass && !itemTags.includes(selectedClass)) {
+      return false;
+    }
+    const itemTimeBuckets = getItemTimeBuckets(item).map((x) => normalizeTagValue(x));
+    if (selectedTimePeriod && !itemTimeBuckets.includes(selectedTimePeriod)) {
       return false;
     }
     if (!q) {
@@ -65,7 +102,29 @@ function normalizeArabicKey(value = "") {
     .trim();
 }
 
-function getFunctionalClassification(item) {
+function normalizeTagValue(value = "") {
+  return String(value)
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[•*]/g, "")
+    .replace(/[.,،؛:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitTags(textValue = "") {
+  return String(textValue)
+    .split(/[\/|,،;\n]+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function getFunctionalTags(item) {
+  if (Array.isArray(item.functionalTags) && item.functionalTags.length) {
+    return item.functionalTags.map((t) => String(t).trim()).filter(Boolean);
+  }
+
+  const fallbackValues = [];
   const allEntries = [
     ...Object.entries(item.fields || {}),
     ...Object.entries(item.xlsx || {}),
@@ -78,10 +137,10 @@ function getFunctionalClassification(item) {
       normalizedKey.endsWith("التصنيف")
     ) {
       const textValue = String(value || "").trim();
-      if (textValue) return textValue;
+      if (textValue) fallbackValues.push(...splitTags(textValue));
     }
   }
-  return "";
+  return [...new Set(fallbackValues)];
 }
 
 function getTimePeriod(item) {
@@ -99,36 +158,216 @@ function getTimePeriod(item) {
   return "";
 }
 
-function populateClassificationFilter() {
-  const classifications = new Set();
-  for (const item of state.items) {
-    const value = getFunctionalClassification(item);
-    if (value) classifications.add(value);
+function getItemTimeBuckets(item) {
+  const value = getTimePeriod(item);
+  const normalized = normalizeTagValue(value);
+  if (!normalized) return ["غير ذلك"];
+
+  const buckets = [];
+  const asCenturyLabel = (n, era) => `القرن ${n} ${era}`.trim();
+
+  // Direct numeric century mentions: "القرن 14" or "القرن ١٤".
+  const directNumericCenturies = value.match(/القرن\s+([0-9٠-٩]{1,2})/g) || [];
+  const indicToWestern = (text) =>
+    text.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
+  const hasHijriHint = /هجري|هـ/.test(value);
+  const hasGregorianHint = /ميلادي|م\b/.test(value);
+  const pickEra = () => {
+    if (hasHijriHint && !hasGregorianHint) return "الهجري";
+    if (!hasHijriHint && hasGregorianHint) return "الميلادي";
+    // Default for ambiguous direct-century text.
+    return "الميلادي";
+  };
+  for (const m of directNumericCenturies) {
+    const rawNum = (m.match(/([0-9٠-٩]{1,2})/) || [])[1];
+    if (!rawNum) continue;
+    const c = Number(indicToWestern(rawNum));
+    if (Number.isFinite(c) && c > 0) buckets.push(asCenturyLabel(c, pickEra()));
   }
 
-  const sorted = [...classifications].sort((a, b) => a.localeCompare(b, "ar"));
+  // Numeric years (e.g. 1956) -> century label.
+  const westernYears = value.match(/\b(1[0-9]{3}|20[0-9]{2})\b/g) || [];
+  for (const y of westernYears) {
+    const year = Number(y);
+    if (!Number.isFinite(year) || year <= 0) continue;
+    const century = Math.floor((year - 1) / 100) + 1;
+    buckets.push(asCenturyLabel(century, "الميلادي"));
+  }
+
+  // Arabic-Indic years (e.g. ١٣٦٩) -> century label.
+  const indicYears = value.match(/[٠-٩]{3,4}/g) || [];
+  for (const iy of indicYears) {
+    const western = indicToWestern(iy);
+    const year = Number(western);
+    if (!Number.isFinite(year) || year <= 0) continue;
+    const century = Math.floor((year - 1) / 100) + 1;
+    const era = hasHijriHint ? "الهجري" : "الميلادي";
+    buckets.push(asCenturyLabel(century, era));
+  }
+
+  const unique = [...new Set(buckets.map((b) => b.replace(/\s+/g, " ").trim()).filter(Boolean))];
+  return unique.length ? unique : ["غير ذلك"];
+}
+
+function getGeneralClassificationFromTags(tags) {
+  return getGeneralClassificationsFromTags(tags)[0] || "";
+}
+
+function getGeneralClassificationsFromTags(tags) {
+  const output = [];
+  for (const tag of tags || []) {
+    const base = String(tag)
+      .split(/[\/|\\-]/)[0]
+      .replace(/[.,،؛:()"]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!base) continue;
+    const words = base.split(" ").filter(Boolean);
+    if (!words.length) continue;
+    // General category should be compact: one or two words max.
+    const shortForm = words.slice(0, 2).join(" ");
+    if (shortForm) output.push(shortForm);
+  }
+  return [...new Set(output)];
+}
+
+function getCategorySearchText(item) {
+  const parts = [
+    item.title || "",
+    item.description || "",
+    ...Object.entries(item.fields || {}).flat().map((x) => String(x || "")),
+    ...Object.entries(item.xlsx || {}).flat().map((x) => String(x || "")),
+    ...getFunctionalTags(item),
+  ];
+  return normalizeTagValue(parts.join(" "));
+}
+
+function getItemGeneralCategories(item) {
+  const haystack = getCategorySearchText(item);
+  const rules = [
+    { label: "فخريات", keys: ["فخار", "فخريات", "خزف", "خزفية"] },
+    { label: "معادن", keys: ["معدن", "معادن", "نحاس", "حديد", "برونز", "فضة", "ذهب"] },
+    { label: "عملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال"] },
+    { label: "منقوشات", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية"] },
+    { label: "مخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة"] },
+    { label: "ملبوسات", keys: ["ملبوس", "ملبوسات", "ثوب", "عباءة", "عمامة", "لباس"] },
+    { label: "أدوات منزلية", keys: ["أدوات منزلية", "منزلية", "هاون", "مهراس", "جرن", "رحى", "طهي"] },
+    { label: "أدوات زينة", keys: ["زينة", "حلي", "قلادة", "خاتم", "سوار", "تزيين"] },
+    { label: "أسلحة", keys: ["سلاح", "أسلحة", "خنجر", "سيف", "رمح", "بندقية"] },
+    { label: "أجهزة", keys: ["أجهزة", "أجهزة", "جهاز", "جهازة", "آلة", "آلية"] },
+  ];
+
+  const matched = [];
+  for (const rule of rules) {
+    if (rule.keys.some((k) => haystack.includes(normalizeTagValue(k)))) {
+      matched.push(rule.label);
+    }
+  }
+  return matched;
+}
+
+function getItemSourceRegions(item) {
+  const haystack = getCategorySearchText(item);
+  const rules = [
+    { label: "الجزيرة العربية", keys: ["الجزيرة العربية", "السعودية", "الحجاز", "نجد", "المدينة المنورة", "مكة", "الخليج"] },
+    { label: "بلاد الشام", keys: ["بلاد الشام", "الشام", "سوريا", "دمشق", "فلسطين", "الأردن", "لبنان"] },
+    { label: "مصر", keys: ["مصر", "القاهرة", "الإسكندرية", "النيل"] },
+    { label: "العراق", keys: ["العراق", "بغداد", "البصرة", "الموصل"] },
+    { label: "اليمن", keys: ["اليمن", "صنعاء", "عدن", "حضرموت"] },
+    { label: "شمال أفريقيا", keys: ["المغرب", "الجزائر", "تونس", "ليبيا", "شمال أفريقيا"] },
+    { label: "الأناضول", keys: ["الأناضول", "تركيا", "العثماني"] },
+    { label: "أوروبا", keys: ["أوروبا", "بريطانيا", "فرنسا", "ألمانيا", "إيطاليا"] },
+  ];
+  const matched = [];
+  for (const rule of rules) {
+    if (rule.keys.some((k) => haystack.includes(normalizeTagValue(k)))) {
+      matched.push(rule.label);
+    }
+  }
+  if (!matched.length) {
+    matched.push("غير محدد");
+  }
+  return matched;
+}
+
+function populateGeneralClassificationFilter() {
+  generalClassificationFilter.innerHTML =
+    `<option value="">الكل</option>` +
+    BASE_GENERAL_CATEGORIES
+      .map((label) => `<option value="${escapeHtml(normalizeTagValue(label))}">${escapeHtml(label)}</option>`)
+      .join("");
+}
+
+function populateSourceRegionFilter() {
+  sourceRegionFilter.innerHTML =
+    `<option value="">الكل</option>` +
+    BASE_SOURCE_REGIONS.map(
+      (label) => `<option value="${escapeHtml(normalizeTagValue(label))}">${escapeHtml(label)}</option>`
+    ).join("");
+}
+
+function populateClassificationFilter() {
+  const classifications = new Map();
+  for (const item of state.items) {
+    const rawTags = getFunctionalTags(item);
+    for (const rawTag of rawTags) {
+      const normalized = normalizeTagValue(rawTag);
+      if (!normalized) continue;
+      if (!classifications.has(normalized)) {
+        classifications.set(normalized, rawTag.trim());
+      }
+    }
+  }
+
+  const sorted = [...classifications.entries()].sort((a, b) => a[1].localeCompare(b[1], "ar"));
   classificationFilter.innerHTML =
     `<option value="">الكل</option>` +
-    sorted.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    sorted
+      .map(([normalized, label]) => `<option value="${escapeHtml(normalized)}">${escapeHtml(label)}</option>`)
+      .join("");
+}
+
+function applyFilters() {
+  state.filtered = filterItems(searchInput.value);
+  state.activeId = state.filtered[0]?.id || null;
+  renderList();
+  renderDetails();
+}
+
+function resetAllFilters() {
+  searchInput.value = "";
+  generalClassificationFilter.value = "";
+  sourceRegionFilter.value = "";
+  classificationFilter.value = "";
+  timePeriodFilter.value = "";
+  applyFilters();
 }
 
 function populateTimePeriodFilter() {
-  const periods = new Set();
+  const periods = new Map();
   for (const item of state.items) {
-    const value = getTimePeriod(item);
-    if (value) periods.add(value);
+    const buckets = getItemTimeBuckets(item);
+    for (const bucket of buckets) {
+      const normalized = normalizeTagValue(bucket);
+      if (!normalized) continue;
+      if (!periods.has(normalized)) {
+        periods.set(normalized, bucket.trim());
+      }
+    }
   }
 
-  const sorted = [...periods].sort((a, b) => a.localeCompare(b, "ar"));
+  const sorted = [...periods.entries()].sort((a, b) => a[1].localeCompare(b[1], "ar"));
   timePeriodFilter.innerHTML =
     `<option value="">الكل</option>` +
-    sorted.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    sorted
+      .map(([normalized, label]) => `<option value="${escapeHtml(normalized)}">${escapeHtml(label)}</option>`)
+      .join("");
 }
 
 function renderList() {
   if (!state.filtered.length) {
     itemsList.innerHTML =
-      "<li class='p-4 text-sm text-slate-500'>لا توجد نتائج مطابقة للفلاتر الحالية.</li>";
+      "<li class='p-4 text-sm font-medium text-slate-500'>لا توجد نتائج مطابقة للفلاتر الحالية.</li>";
     resultCount.textContent = "0 نتيجة";
     detailsPanel.innerHTML = "<p class='text-slate-500'>لا توجد عناصر مطابقة للبحث.</p>";
     return;
@@ -140,18 +379,18 @@ function renderList() {
       const thumb = resolveAssetPath(item.primaryImage);
       const activeClass =
         item.id === state.activeId
-          ? "bg-indigo-50 border-indigo-200"
-          : "bg-white border-transparent hover:bg-slate-50";
+          ? "bg-gradient-to-r from-fuchsia-50 to-indigo-50 border-fuchsia-200 shadow-sm"
+          : "bg-white border-transparent hover:bg-fuchsia-50/40";
       return `
-        <li class="cursor-pointer border-b border-slate-100 p-3 transition ${activeClass}" data-item-id="${escapeHtml(item.id)}">
+        <li class="cursor-pointer border-b border-fuchsia-100 p-2.5 sm:p-3 transition ${activeClass}" data-item-id="${escapeHtml(item.id)}">
           ${
             thumb
-              ? `<img class="mb-2 h-28 w-full rounded-xl border border-slate-200 object-cover" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.title)}" />`
-              : `<div class="mb-2 h-28 w-full rounded-xl border border-dashed border-slate-200 bg-slate-50"></div>`
+              ? `<img class="mb-2 h-24 sm:h-28 w-full rounded-xl sm:rounded-2xl border border-fuchsia-200 object-cover shadow-sm" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.title)}" />`
+              : `<div class="mb-2 h-24 sm:h-28 w-full rounded-xl sm:rounded-2xl border border-dashed border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50"></div>`
           }
           <div>
-            <h3 class="text-sm font-bold leading-6 text-slate-800">${escapeHtml(item.title || "بدون عنوان")}</h3>
-            <p class="mt-1 text-xs text-slate-500">${escapeHtml(item.source || "")}</p>
+            <h3 class="text-sm font-extrabold leading-5 sm:leading-6 text-slate-800">${escapeHtml(item.title || "بدون عنوان")}</h3>
+            <p class="mt-1 text-xs font-semibold text-fuchsia-600">${escapeHtml(item.source || "")}</p>
           </div>
         </li>
       `;
@@ -198,8 +437,8 @@ function renderRows(fieldsObj = {}) {
   return rows
     .map(
       ([key, value]) => `
-      <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div class="mb-1 text-xs font-bold text-slate-700">${escapeHtml(String(key))}</div>
+      <div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-fuchsia-50 p-3">
+        <div class="mb-1 text-xs font-extrabold text-indigo-700">${escapeHtml(String(key))}</div>
         <div class="text-sm leading-6 text-slate-600">${escapeHtml(String(value))}</div>
       </div>
     `
@@ -220,45 +459,45 @@ function renderDetails() {
   const urls = item.urls || [];
 
   const description = item.description
-    ? `<pre class="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700">${escapeHtml(item.description)}</pre>`
+    ? `<pre class="whitespace-pre-wrap rounded-xl sm:rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-3 sm:p-4 text-sm leading-6 sm:leading-7 text-slate-700">${escapeHtml(item.description)}</pre>`
     : "<p class='text-sm text-slate-500'>لا يوجد وصف متاح.</p>";
 
   detailsPanel.innerHTML = `
-    <h2 class="mb-4 text-2xl font-extrabold leading-10 text-slate-900">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
-    ${mainImage ? `<img class="mb-4 max-h-[420px] w-full rounded-2xl border border-slate-200 object-contain bg-slate-50 p-2" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />` : ""}
+    <h2 class="mb-3 sm:mb-4 bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-xl sm:text-2xl font-extrabold leading-8 sm:leading-10 text-transparent">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
+    ${mainImage ? `<img class="mb-3 sm:mb-4 max-h-[300px] sm:max-h-[420px] w-full rounded-2xl sm:rounded-3xl border border-fuchsia-200 object-contain bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />` : ""}
 
-    <h3 class="mb-2 text-lg font-bold text-slate-800">الوصف</h3>
+    <h3 class="mb-2 text-lg font-extrabold text-fuchsia-700">الوصف</h3>
     ${description}
 
     ${
       Object.keys(item.fields || {}).length
-        ? `<h3 class="mb-2 mt-5 text-lg font-bold text-slate-800">معلومات إضافية</h3><div class="grid grid-cols-1 gap-3 md:grid-cols-2">${renderRows(item.fields)}</div>`
+        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-indigo-700">معلومات إضافية</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.fields)}</div>`
         : ""
     }
 
     ${
       Object.keys(item.xlsx || {}).length
-        ? `<h3 class="mb-2 mt-5 text-lg font-bold text-slate-800">بيانات من ملف Excel</h3><div class="grid grid-cols-1 gap-3 md:grid-cols-2">${renderRows(item.xlsx)}</div>`
+        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-cyan-700">بيانات من ملف Excel</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.xlsx)}</div>`
         : ""
     }
 
     <div class="mt-5">
-      <h3 class="mb-2 text-lg font-bold text-slate-800">الروابط</h3>
+      <h3 class="mb-2 text-lg font-extrabold text-emerald-700">الروابط</h3>
       ${
         urls.length
           ? urls
               .map(
                 (url) =>
-                  `<p class="mb-2"><a class="break-all text-sm font-medium text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-indigo-700" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></p>`
+                  `<p class="mb-2"><a class="break-all text-sm font-bold text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-fuchsia-600" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></p>`
               )
               .join("")
           : "<p class='text-sm text-slate-500'>لا توجد روابط.</p>"
       }
       ${
         qrImage
-          ? `<div class="mt-4 inline-block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-               <p class="mb-2 text-xs font-semibold text-slate-500">QR</p>
-               <img class="h-40 w-40 rounded-lg" src="${escapeHtml(qrImage)}" alt="QR ${escapeHtml(item.title)}" />
+          ? `<div class="mt-4 inline-block rounded-xl sm:rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-2.5 sm:p-3 shadow-sm">
+               <p class="mb-2 text-xs font-bold text-emerald-700">QR</p>
+               <img class="h-32 w-32 sm:h-40 sm:w-40 rounded-lg" src="${escapeHtml(qrImage)}" alt="QR ${escapeHtml(item.title)}" />
              </div>`
           : ""
       }
@@ -268,6 +507,8 @@ function renderDetails() {
 
 async function init() {
   state.items = await loadItems();
+  populateGeneralClassificationFilter();
+  populateSourceRegionFilter();
   populateClassificationFilter();
   populateTimePeriodFilter();
   state.filtered = [...state.items];
@@ -276,26 +517,15 @@ async function init() {
   renderList();
   renderDetails();
 
-  searchInput.addEventListener("input", () => {
-    state.filtered = filterItems(searchInput.value);
-    state.activeId = state.filtered[0]?.id || null;
-    renderList();
-    renderDetails();
-  });
-
+  searchInput.addEventListener("input", applyFilters);
+  generalClassificationFilter.addEventListener("change", applyFilters);
+  sourceRegionFilter.addEventListener("change", applyFilters);
   classificationFilter.addEventListener("change", () => {
-    state.filtered = filterItems(searchInput.value);
-    state.activeId = state.filtered[0]?.id || null;
-    renderList();
-    renderDetails();
+    applyFilters();
+    populateClassificationFilter();
   });
-
-  timePeriodFilter.addEventListener("change", () => {
-    state.filtered = filterItems(searchInput.value);
-    state.activeId = state.filtered[0]?.id || null;
-    renderList();
-    renderDetails();
-  });
+  timePeriodFilter.addEventListener("change", applyFilters);
+  resetFiltersBtn.addEventListener("click", resetAllFilters);
 }
 
 init().catch((error) => {
