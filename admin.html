@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>لوحة إدارة المتحف</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Tajawal", "Tahoma", "Arial", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="min-h-screen bg-slate-100 text-slate-800">
+    <main class="mx-auto w-full max-w-7xl p-4 md:p-6">
+      <header class="rounded-2xl bg-slate-900 p-6 text-white shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 class="text-2xl font-extrabold md:text-3xl">لوحة إدارة قاعدة البيانات</h1>
+            <p class="mt-2 text-sm text-slate-300">إضافة وتعديل وحذف العناصر ثم حفظها محلياً.</p>
+          </div>
+          <a href="./index.html" class="rounded-xl border border-white/20 px-4 py-2 text-sm font-bold"
+            >العودة للفهرس</a
+          >
+        </div>
+      </header>
+
+      <section class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[380px_1fr]">
+        <aside class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="border-b border-slate-100 p-4">
+            <input
+              id="adminSearch"
+              type="search"
+              placeholder="بحث بالعنوان..."
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            />
+            <div class="mt-3 flex gap-2">
+              <button id="newItemBtn" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-bold text-white">
+                عنصر جديد
+              </button>
+              <button id="deleteItemBtn" class="rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white">
+                حذف العنصر
+              </button>
+            </div>
+          </div>
+          <ul id="adminItemsList" class="max-h-[72vh] overflow-auto"></ul>
+        </aside>
+
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <form id="itemForm" class="grid grid-cols-1 gap-3">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-bold text-slate-600">المعرف ID</label>
+                <input id="itemId" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-bold text-slate-600">العنوان</label>
+                <input id="itemTitle" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-bold text-slate-600">الصورة الرئيسية</label>
+                <input id="itemPrimaryImage" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-bold text-slate-600">الرابط الرئيسي</label>
+                <input id="itemPrimaryUrl" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="mb-1 block text-xs font-bold text-slate-600">الوصف</label>
+              <textarea id="itemDescription" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-bold text-slate-600">الروابط (كل رابط بسطر)</label>
+              <textarea id="itemUrls" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-bold text-slate-600">الصور (كل مسار بسطر)</label>
+              <textarea id="itemImages" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-bold text-slate-600">حقول إضافية JSON</label>
+              <textarea id="itemFields" rows="6" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"></textarea>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-bold text-slate-600">بيانات Excel JSON</label>
+              <textarea id="itemXlsx" rows="6" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"></textarea>
+            </div>
+          </form>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button id="saveItemBtn" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white">
+              حفظ تعديل العنصر
+            </button>
+            <button id="saveAllBtn" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white">
+              حفظ كل التعديلات
+            </button>
+            <button id="exportBtn" class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white">
+              تصدير JSON
+            </button>
+            <label class="cursor-pointer rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white">
+              استيراد JSON
+              <input id="importInput" type="file" accept=".json,application/json" class="hidden" />
+            </label>
+            <button id="resetBtn" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white">
+              إلغاء النسخة المحلية
+            </button>
+          </div>
+          <p id="adminStatus" class="mt-3 text-sm text-slate-600"></p>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app-data.js"></script>
+    <script src="./admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,174 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Tahoma, Arial, sans-serif;
+  background: #f4f6f9;
+  color: #1b2430;
+}
+
+.layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.topbar p {
+  margin: 8px 0 0;
+  color: #4f5d75;
+}
+
+.search-box {
+  margin-top: 18px;
+}
+
+.search-box input {
+  width: 100%;
+  border: 1px solid #cfd6df;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.search-box label {
+  display: block;
+  margin-top: 10px;
+}
+
+.search-box select {
+  width: 100%;
+  border: 1px solid #cfd6df;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+  margin-top: 8px;
+  background: #fff;
+}
+
+.content {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+
+.list-panel,
+.detail-panel {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #dbe3ed;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.list-panel {
+  overflow: auto;
+  max-height: calc(100vh - 210px);
+}
+
+#itemsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item-card {
+  cursor: pointer;
+  border-bottom: 1px solid #edf2f7;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.item-card:hover,
+.item-card.active {
+  background: #ecf4ff;
+}
+
+.item-thumb {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #d3dbe5;
+  background: #f1f4f8;
+}
+
+.item-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.item-sub {
+  margin: 4px 0 0;
+  color: #6c7a8d;
+  font-size: 12px;
+}
+
+.detail-panel {
+  padding: 18px;
+}
+
+.placeholder {
+  color: #6c7a8d;
+}
+
+.detail-title {
+  margin-top: 0;
+}
+
+.detail-main-image {
+  max-width: min(100%, 480px);
+  border-radius: 10px;
+  border: 1px solid #d3dbe5;
+  margin: 8px 0 14px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.info-row {
+  background: #f7f9fc;
+  border: 1px solid #e0e7f0;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.info-key {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.links {
+  margin-top: 16px;
+}
+
+.qr-image {
+  width: 180px;
+  height: 180px;
+  border: 1px solid #d3dbe5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .list-panel {
+    max-height: 300px;
+  }
+}
