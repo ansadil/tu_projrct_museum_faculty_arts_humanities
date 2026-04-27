@@ -10,20 +10,25 @@ const detailsPanel = document.getElementById("detailsPanel");
 const searchInput = document.getElementById("searchInput");
 const generalClassificationFilter = document.getElementById("generalClassificationFilter");
 const sourceRegionFilter = document.getElementById("sourceRegionFilter");
-const classificationFilter = document.getElementById("classificationFilter");
 const timePeriodFilter = document.getElementById("timePeriodFilter");
 const resultCount = document.getElementById("resultCount");
 const resetFiltersBtn = document.getElementById("resetFiltersBtn");
 const BASE_GENERAL_CATEGORIES = [
-  "فخريات",
-  "عملات",
-  "منقوشات",
-  "مخطوطات",
-  "ملبوسات",
-  "أدوات منزلية",
-  "أدوات زينة",
-  "أسلحة",
-  "أجهزة",
+  "الأسلحة",
+  "العينات الصخرية الطبيعية",
+  "المخطوطات",
+  "الأدوات المنزلية الحجرية",
+  "النقود والعملات",
+  "الآلات الموسيقية",
+  "الأدوات الخشبية والمعمارية",
+  "أدوات إعداد القهوة",
+  "النقوش العربية والرسوم الصخرية",
+  "الأدوات المنزلية التراثية",
+  "الملابس والمقتنيات التراثية",
+  "الفخاريات",
+  "أدوات الإتصال",
+  "الحلي والمصوغات",
+  "أدوات زراعية",
 ];
 const BASE_SOURCE_REGIONS = [
   "الجزيرة العربية",
@@ -55,12 +60,10 @@ function escapeHtml(value = "") {
 function filterItems(query) {
   const selectedGeneralClass = (generalClassificationFilter?.value || "").trim();
   const selectedSourceRegion = (sourceRegionFilter?.value || "").trim();
-  const selectedClass = (classificationFilter?.value || "").trim();
   const selectedTimePeriod = (timePeriodFilter?.value || "").trim();
   const q = query.trim().toLowerCase();
   return state.items.filter((item) => {
-    const itemTags = getFunctionalTags(item).map((tag) => normalizeTagValue(tag));
-    const itemGeneralClasses = getItemGeneralCategories(item)
+    const itemGeneralClasses = getItemGeneralClassifications(item)
       .map((gc) => normalizeTagValue(gc))
       .filter(Boolean);
     if (selectedGeneralClass && !itemGeneralClasses.includes(selectedGeneralClass)) {
@@ -68,9 +71,6 @@ function filterItems(query) {
     }
     const itemSourceRegions = getItemSourceRegions(item).map((r) => normalizeTagValue(r));
     if (selectedSourceRegion && !itemSourceRegions.includes(selectedSourceRegion)) {
-      return false;
-    }
-    if (selectedClass && !itemTags.includes(selectedClass)) {
       return false;
     }
     const itemTimeBuckets = getItemTimeBuckets(item).map((x) => normalizeTagValue(x));
@@ -119,28 +119,90 @@ function splitTags(textValue = "") {
     .filter(Boolean);
 }
 
-function getFunctionalTags(item) {
-  if (Array.isArray(item.functionalTags) && item.functionalTags.length) {
-    return item.functionalTags.map((t) => String(t).trim()).filter(Boolean);
-  }
 
-  const fallbackValues = [];
+function getItemGeneralClassifications(item) {
+  const values = [];
+  const allEntries = [
+    ...Object.entries(item.fields || {}),
+    ...Object.entries(item.xlsx || {}),
+  ];
+  
+  for (const [key, value] of allEntries) {
+ 
+    const normalizedKey = normalizeArabicKey(key);
+   
+    // General-class filter must be sourced from "التصنيف" only.
+    if (  normalizedKey.includes("تصنيف" ) 
+    ) {
+     
+      const textValue = String(value || "").trim();
+      if (textValue) values.push(...splitTags(textValue));
+    }
+  }
+  return dedupeLabelsByNormalized([...values, ...inferGeneralClassificationsByRules(item)]);
+}
+
+
+function inferGeneralClassificationsByRules(item) {
+  // console.log("inferGeneralClassificationsByRules");
+  // GeneralClass rules should map from "التصنيف" content specifically.
+  const classificationText = getRawGeneralClassificationText(item);
+  // console.log("classificationText", classificationText);
+  const haystack = normalizeTagValue(classificationText);
+  if (!haystack) return [];
+  const rules = [
+    { label: "الفخاريات", keys: ["فخار", "خزف", "فخ"] },
+    { label: "أدوات إعداد القهوة", keys: ["قهوة"] },
+    { label: "النقود والعملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال"] },
+    { label: "النقوش العربية والرسوم الصخرية", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية"] },
+    { label: "المخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة"] },
+    { label: "الملابس والمقتنيات التراثية", keys: ["ملبوس", "ملابس", "ثوب", "عباءة", "عمامة", "لباس"] },
+    { label: "الأدوات المنزلية التراثية", keys: ["أدوات منزلية", "منزل", "هاون", "مهراس", "جرن", "رحى", "طهي"] },
+    { label: "الأدوات المنزلية الحجرية", keys: ["أدوات حجرية منزلية"] },
+    { label: "الحلي والمصوغات", keys: ["زينة", "حلي", "قلادة", "خاتم", "سوار", "تزيين"] },
+    { label: "الأسلحة", keys: ["سلاح", "أسلحة"] },
+    { label: "أدوات الإتصال", keys: ["اتصال", "جهاز",] },
+    { label: "أدوات زراعية", keys: ["زرع"] },
+    { label: "الأدوات الخشبية والمعمارية", keys: [ "معمار"] },
+    { label: "الآلات الموسيقية", keys: [ "موسيق", "يقاع"] },
+  ];
+  const matched = [];
+  for (const rule of rules) {
+    if (rule.keys.some((k) => haystack.includes(normalizeTagValue(k)))) {
+      matched.push(rule.label);
+    }
+  }
+  return dedupeLabelsByNormalized(matched);
+}
+
+function getRawGeneralClassificationText(item) {
+  const values = [];
   const allEntries = [
     ...Object.entries(item.fields || {}),
     ...Object.entries(item.xlsx || {}),
   ];
   for (const [key, value] of allEntries) {
     const normalizedKey = normalizeArabicKey(key);
-    if (
-      normalizedKey.includes("التصنيفالوظيفي") ||
-      normalizedKey === "التصنيف" ||
-      normalizedKey.endsWith("التصنيف")
-    ) {
+    if (normalizedKey.includes("تصنيف") ) {
       const textValue = String(value || "").trim();
-      if (textValue) fallbackValues.push(...splitTags(textValue));
+      if (textValue) values.push(textValue);
     }
   }
-  return [...new Set(fallbackValues)];
+  return values.join(" ");
+}
+
+function dedupeLabelsByNormalized(labels = []) {
+  const unique = new Map();
+  for (const label of labels) {
+    const raw = String(label || "").trim();
+    if (!raw) continue;
+    const normalized = normalizeTagValue(raw);
+    if (!normalized) continue;
+    if (!unique.has(normalized)) {
+      unique.set(normalized, raw);
+    }
+  }
+  return [...unique.values()];
 }
 
 function getTimePeriod(item) {
@@ -150,7 +212,7 @@ function getTimePeriod(item) {
   ];
   for (const [key, value] of allEntries) {
     const normalizedKey = normalizeArabicKey(key);
-    if (normalizedKey.includes("الفترةالزمنية") || normalizedKey.includes("فترةزمنية")) {
+    if (normalizedKey.includes("فترة") ) {
       const textValue = String(value || "").trim();
       if (textValue) return textValue;
     }
@@ -231,41 +293,17 @@ function getGeneralClassificationsFromTags(tags) {
   return [...new Set(output)];
 }
 
-function getCategorySearchText(item) {
+function getCategorySearchText(item, options = {}) {
+  const includeFunctionalTags = options.includeFunctionalTags !== false;
   const parts = [
     item.title || "",
     item.description || "",
     ...Object.entries(item.fields || {}).flat().map((x) => String(x || "")),
     ...Object.entries(item.xlsx || {}).flat().map((x) => String(x || "")),
-    ...getFunctionalTags(item),
   ];
+  
   return normalizeTagValue(parts.join(" "));
 }
-
-function getItemGeneralCategories(item) {
-  const haystack = getCategorySearchText(item);
-  const rules = [
-    { label: "فخريات", keys: ["فخار", "فخريات", "خزف", "خزفية"] },
-    { label: "معادن", keys: ["معدن", "معادن", "نحاس", "حديد", "برونز", "فضة", "ذهب"] },
-    { label: "عملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال"] },
-    { label: "منقوشات", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية"] },
-    { label: "مخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة"] },
-    { label: "ملبوسات", keys: ["ملبوس", "ملبوسات", "ثوب", "عباءة", "عمامة", "لباس"] },
-    { label: "أدوات منزلية", keys: ["أدوات منزلية", "منزلية", "هاون", "مهراس", "جرن", "رحى", "طهي"] },
-    { label: "أدوات زينة", keys: ["زينة", "حلي", "قلادة", "خاتم", "سوار", "تزيين"] },
-    { label: "أسلحة", keys: ["سلاح", "أسلحة", "خنجر", "سيف", "رمح", "بندقية"] },
-    { label: "أجهزة", keys: ["أجهزة", "أجهزة", "جهاز", "جهازة", "آلة", "آلية"] },
-  ];
-
-  const matched = [];
-  for (const rule of rules) {
-    if (rule.keys.some((k) => haystack.includes(normalizeTagValue(k)))) {
-      matched.push(rule.label);
-    }
-  }
-  return matched;
-}
-
 function getItemSourceRegions(item) {
   const haystack = getCategorySearchText(item);
   const rules = [
@@ -306,27 +344,6 @@ function populateSourceRegionFilter() {
     ).join("");
 }
 
-function populateClassificationFilter() {
-  const classifications = new Map();
-  for (const item of state.items) {
-    const rawTags = getFunctionalTags(item);
-    for (const rawTag of rawTags) {
-      const normalized = normalizeTagValue(rawTag);
-      if (!normalized) continue;
-      if (!classifications.has(normalized)) {
-        classifications.set(normalized, rawTag.trim());
-      }
-    }
-  }
-
-  const sorted = [...classifications.entries()].sort((a, b) => a[1].localeCompare(b[1], "ar"));
-  classificationFilter.innerHTML =
-    `<option value="">الكل</option>` +
-    sorted
-      .map(([normalized, label]) => `<option value="${escapeHtml(normalized)}">${escapeHtml(label)}</option>`)
-      .join("");
-}
-
 function applyFilters() {
   state.filtered = filterItems(searchInput.value);
   state.activeId = state.filtered[0]?.id || null;
@@ -338,7 +355,6 @@ function resetAllFilters() {
   searchInput.value = "";
   generalClassificationFilter.value = "";
   sourceRegionFilter.value = "";
-  classificationFilter.value = "";
   timePeriodFilter.value = "";
   applyFilters();
 }
@@ -390,7 +406,6 @@ function renderList() {
           }
           <div>
             <h3 class="text-sm font-extrabold leading-5 sm:leading-6 text-slate-800">${escapeHtml(item.title || "بدون عنوان")}</h3>
-            <p class="mt-1 text-xs font-semibold text-fuchsia-600">${escapeHtml(item.source || "")}</p>
           </div>
         </li>
       `;
@@ -509,7 +524,6 @@ async function init() {
   state.items = await loadItems();
   populateGeneralClassificationFilter();
   populateSourceRegionFilter();
-  populateClassificationFilter();
   populateTimePeriodFilter();
   state.filtered = [...state.items];
   state.activeId = state.filtered[0]?.id || null;
@@ -520,10 +534,6 @@ async function init() {
   searchInput.addEventListener("input", applyFilters);
   generalClassificationFilter.addEventListener("change", applyFilters);
   sourceRegionFilter.addEventListener("change", applyFilters);
-  classificationFilter.addEventListener("change", () => {
-    applyFilters();
-    populateClassificationFilter();
-  });
   timePeriodFilter.addEventListener("change", applyFilters);
   resetFiltersBtn.addEventListener("click", resetAllFilters);
 }
