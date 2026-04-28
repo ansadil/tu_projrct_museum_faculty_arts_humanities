@@ -405,7 +405,10 @@ function renderList() {
               : `<div class="mb-2 h-24 sm:h-28 w-full rounded-xl sm:rounded-2xl border border-dashed border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50"></div>`
           }
           <div>
+            
+            <a class="mt-2 inline-block text-xs font-bold text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-fuchsia-600" href="./item.html?id=${encodeURIComponent(item.id)}">
             <h3 class="text-sm font-extrabold leading-5 sm:leading-6 text-slate-800">${escapeHtml(item.title || "بدون عنوان")}</h3>
+            </a>
           </div>
         </li>
       `;
@@ -447,14 +450,22 @@ async function loadItems() {
 }
 
 function renderRows(fieldsObj = {}) {
-  const rows = Object.entries(fieldsObj);
+  const rows = Object.entries(fieldsObj).filter(([key]) => {
+    const normalizedKey = String(key).toLowerCase();
+    return (
+      normalizedKey !== "url" &&
+      !normalizedKey.includes("http") &&
+      !normalizedKey.includes("رابط")
+    );
+  });
+
   if (!rows.length) return "";
   return rows
     .map(
       ([key, value]) => `
-      <div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-fuchsia-50 p-3">
-        <div class="mb-1 text-xs font-extrabold text-indigo-700">${escapeHtml(String(key))}</div>
-        <div class="text-sm leading-6 text-slate-600">${escapeHtml(String(value))}</div>
+      <div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-fuchsia-50 p-3 text-wrap">
+        <div class="mb-1 text-xs font-extrabold text-indigo-700 text-wrap">${escapeHtml(String(key))}</div>
+        <div class="text-sm leading-6 text-slate-600 text-wrap text-pretty">${escapeHtml(String(value))}</div>
       </div>
     `
     )
@@ -478,7 +489,12 @@ function renderDetails() {
     : "<p class='text-sm text-slate-500'>لا يوجد وصف متاح.</p>";
 
   detailsPanel.innerHTML = `
-    <h2 class="mb-3 sm:mb-4 bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-xl sm:text-2xl font-extrabold leading-8 sm:leading-10 text-transparent">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
+    
+    <div class="mb-3">
+      <a class="" href="./item.html?id=${encodeURIComponent(item.id)}">
+      <h2 class="mb-3 sm:mb-4 bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-xl sm:text-2xl font-extrabold leading-8 sm:leading-10 text-transparent">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
+      </a>
+    </div>
     ${mainImage ? `<img class="mb-3 sm:mb-4 max-h-[300px] sm:max-h-[420px] w-full rounded-2xl sm:rounded-3xl border border-fuchsia-200 object-contain bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />` : ""}
 
     <h3 class="mb-2 text-lg font-extrabold text-fuchsia-700">الوصف</h3>
