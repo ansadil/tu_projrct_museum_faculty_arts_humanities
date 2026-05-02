@@ -25,25 +25,29 @@
     />
   </head>
   <body class="min-h-screen bg-gradient-to-br from-fuchsia-100 via-sky-100 to-emerald-100 text-slate-800">
-    <main class="mx-auto w-full max-w-7xl p-3 sm:p-4 md:p-6">
-      <header class="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-l from-pink-600 via-violet-600 to-indigo-600 p-4 sm:p-6 text-white shadow-2xl">
-        <div class="pointer-events-none absolute -left-12 -top-12 h-40 w-40 rounded-full bg-white/20 blur-2xl"></div>
-        <div class="pointer-events-none absolute -bottom-12 -right-8 h-40 w-40 rounded-full bg-cyan-300/30 blur-2xl"></div>
-        <div class="flex flex-wrap items-center justify-between gap-3">
+    <main class="mx-auto w-full max-w-none px-3 py-3 sm:px-5 sm:py-4 md:px-8 md:py-5 lg:px-10 lg:py-6 xl:px-12 2xl:px-16">
+      <header
+        class="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/70 bg-gradient-to-l from-fuchsia-100 via-violet-50 to-sky-100 p-4 sm:p-6 text-slate-800 shadow-xl backdrop-blur-sm"
+      >
+        <div class="pointer-events-none absolute -left-12 -top-12 h-40 w-40 rounded-full bg-fuchsia-300/25 blur-2xl"></div>
+        <div class="pointer-events-none absolute -bottom-12 -right-8 h-40 w-40 rounded-full bg-emerald-200/35 blur-2xl"></div>
+        <div class="pointer-events-none absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-200/30 blur-3xl"></div>
+        <div class="relative flex flex-wrap items-center justify-between gap-3">
           <div>
             <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <div>
-                <img src="./assets/logo/logo1.png" alt="logo" class="h-24 w-24 sm:h-32 sm:w-32 md:h-40 md:w-40">
+                <img src="./assets/logo/logo1.png" alt="logo" class="h-24 w-24 sm:h-32 sm:w-32 md:h-40 md:w-40" />
               </div>
               <div>
-                <h1 class="text-xl font-extrabold leading-tight sm:text-2xl md:text-3xl">متحف كلية الادآب والعلوم الانسانية</h1>
-                <p class="mt-2 text-xs text-indigo-100 sm:text-sm md:text-base">
+                <h1 class="bg-gradient-to-r from-fuchsia-700 via-violet-700 to-indigo-700 bg-clip-text text-xl font-extrabold leading-tight text-transparent sm:text-2xl md:text-3xl">
+                  متحف كلية الادآب والعلوم الانسانية
+                </h1>
+                <p class="mt-2 text-xs text-slate-600 sm:text-sm md:text-base">
                   ابحث عن القطعة، ثم افتح تفاصيلها مع الصورة والرابط وكود QR.
                 </p>
               </div>
             </div>
           </div>
-         
         </div>
       </header>
 
@@ -104,17 +108,29 @@
         </div>
       </section>
 
-      <section class="mt-4 grid grid-cols-1 gap-4 xl:h-[74vh] xl:grid-cols-[360px_1fr]">
-        <aside class="flex min-h-0 flex-col overflow-hidden rounded-2xl sm:rounded-3xl border border-white/60 bg-white/90 shadow-xl backdrop-blur">
-          <div class="border-b border-fuchsia-100 bg-gradient-to-r from-fuchsia-50 to-indigo-50 px-4 py-3">
+      <!-- Tailwind safelist: arbitrary grid cols used from app.js -->
+      <span class="hidden xl:grid-cols-1 xl:grid-cols-[minmax(380px,28vw)_minmax(0,1fr)]" aria-hidden="true"></span>
+
+      <section
+        id="browseSection"
+        class="mt-4 grid grid-cols-1 gap-4 xl:h-[74vh] xl:grid-cols-1"
+      >
+        <aside
+          class="flex min-h-0 select-none flex-col overflow-hidden rounded-2xl sm:rounded-3xl border border-white/60 bg-white/90 shadow-xl backdrop-blur xl:w-full xl:max-w-none"
+        >
+          <div class="shrink-0 border-b border-fuchsia-100 bg-gradient-to-r from-fuchsia-50 to-indigo-50 px-3 py-2.5 sm:px-4">
             <h2 class="text-sm font-extrabold text-fuchsia-700">قائمة القطع</h2>
           </div>
-          <ul id="itemsList" class="max-h-[45vh] overflow-auto xl:h-full xl:max-h-none"></ul>
+          <ul
+            id="itemsList"
+            class="grid min-h-0 max-h-[45vh] flex-1 grid-cols-1 gap-2 overflow-y-auto overflow-x-hidden p-2 [overflow-anchor:none] select-none sm:grid-cols-2 sm:gap-2.5 sm:p-3 lg:grid-cols-3 lg:gap-3 xl:max-h-none xl:grid-cols-4 xl:gap-3"
+          ></ul>
         </aside>
 
-        <article id="detailsPanel" class="min-h-0 overflow-auto rounded-2xl sm:rounded-3xl border border-white/60 bg-white/90 p-4 sm:p-5 shadow-xl backdrop-blur xl:h-full">
-          <p class="text-slate-500">اختر قطعة من القائمة لعرض التفاصيل.</p>
-        </article>
+        <article
+          id="detailsPanel"
+          class="hidden min-h-0 select-text overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-2xl sm:rounded-3xl border border-white/60 bg-white/90 p-4 sm:p-5 shadow-xl backdrop-blur xl:h-full"
+        ></article>
       </section>
 
       <footer class="mt-4 rounded-2xl border border-white/60 bg-white/80 px-4 py-3 text-center text-sm font-semibold text-slate-700 shadow-md backdrop-blur">
@@ -130,6 +146,8 @@
     </main>
 
     <script src="./app-data.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="./qr-mount.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

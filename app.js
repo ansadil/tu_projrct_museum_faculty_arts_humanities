@@ -7,28 +7,43 @@ const ADMIN_STORAGE_KEY = "museum_items_override_v1";
 
 const itemsList = document.getElementById("itemsList");
 const detailsPanel = document.getElementById("detailsPanel");
+const browseSection = document.getElementById("browseSection");
 const searchInput = document.getElementById("searchInput");
 const generalClassificationFilter = document.getElementById("generalClassificationFilter");
 const sourceRegionFilter = document.getElementById("sourceRegionFilter");
 const timePeriodFilter = document.getElementById("timePeriodFilter");
 const resultCount = document.getElementById("resultCount");
 const resetFiltersBtn = document.getElementById("resetFiltersBtn");
+
+const DETAIL_ZOOM_MIN = 1;
+const DETAIL_ZOOM_MAX = 3;
+const DETAIL_ZOOM_STEP = 0.25;
+let detailsImageZoomAbort = null;
+
+function teardownDetailsImageZoom() {
+  if (detailsImageZoomAbort) {
+    detailsImageZoomAbort.abort();
+    detailsImageZoomAbort = null;
+  }
+}
+
 const BASE_GENERAL_CATEGORIES = [
   "الأسلحة",
-  "العينات الصخرية الطبيعية",
-  "المخطوطات",
-  "الأدوات المنزلية الحجرية",
-  "النقود والعملات",
-  "الآلات الموسيقية",
-  "الأدوات الخشبية والمعمارية",
-  "أدوات إعداد القهوة",
-  "النقوش العربية والرسوم الصخرية",
-  "الأدوات المنزلية التراثية",
   "الملابس والمقتنيات التراثية",
-  "الفخاريات",
+  "الأدوات الخشبية والمعمارية",
+  "الآلات الموسيقية",
+  "الأدوات المنزلية التراثية",
   "أدوات الإتصال",
-  "الحلي والمصوغات",
+  "الأدوات المنزلية الحجرية",
+  "النقوش العربية والرسوم الصخرية",
+  "الفخاريات",
+  "العينات الصخرية الطبيعية",
   "أدوات زراعية",
+  "أدوات إعداد القهوة",
+  "الحلي والمصوغات",
+  "النقود والعملات",
+  "المخطوطات",
+
 ];
 const BASE_SOURCE_REGIONS = [
   "الجزيرة العربية",
@@ -121,6 +136,7 @@ function splitTags(textValue = "") {
 
 
 function getItemGeneralClassifications(item) {
+  
   const values = [];
   const allEntries = [
     ...Object.entries(item.fields || {}),
@@ -132,7 +148,7 @@ function getItemGeneralClassifications(item) {
     const normalizedKey = normalizeArabicKey(key);
    
     // General-class filter must be sourced from "التصنيف" only.
-    if (  normalizedKey.includes("تصنيف" ) 
+    if (  normalizedKey.includes("تسجيل") || normalizedKey.includes("تصنيف")
     ) {
      
       const textValue = String(value || "").trim();
@@ -151,20 +167,21 @@ function inferGeneralClassificationsByRules(item) {
   const haystack = normalizeTagValue(classificationText);
   if (!haystack) return [];
   const rules = [
-    { label: "الفخاريات", keys: ["فخار", "خزف", "فخ"] },
-    { label: "أدوات إعداد القهوة", keys: ["قهوة"] },
-    { label: "النقود والعملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال"] },
-    { label: "النقوش العربية والرسوم الصخرية", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية"] },
-    { label: "المخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة"] },
-    { label: "الملابس والمقتنيات التراثية", keys: ["ملبوس", "ملابس", "ثوب", "عباءة", "عمامة", "لباس"] },
-    { label: "الأدوات المنزلية التراثية", keys: ["أدوات منزلية", "منزل", "هاون", "مهراس", "جرن", "رحى", "طهي"] },
-    { label: "الأدوات المنزلية الحجرية", keys: ["أدوات حجرية منزلية"] },
-    { label: "الحلي والمصوغات", keys: ["زينة", "حلي", "قلادة", "خاتم", "سوار", "تزيين"] },
-    { label: "الأسلحة", keys: ["سلاح", "أسلحة"] },
-    { label: "أدوات الإتصال", keys: ["اتصال", "جهاز",] },
-    { label: "أدوات زراعية", keys: ["زرع"] },
-    { label: "الأدوات الخشبية والمعمارية", keys: [ "معمار"] },
-    { label: "الآلات الموسيقية", keys: [ "موسيق", "يقاع"] },
+    { label: "الفخاريات", keys: ["فخار", "خزف", "فخ","TU-MUS-26-PO"] },
+    { label: "العينات الصخرية الطبيعية", keys: ["عينة", "صخور ", "أحجار",,"TU-MUS-26-NR"] },
+    { label: "أدوات إعداد القهوة", keys: ["قهوة","TU-MUS-26-SC"] },
+    { label: "النقود والعملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال","TU-MUS-26-MC"] },
+    { label: "النقوش العربية والرسوم الصخرية", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية","TU-MUS-26-IN"] },
+    { label: "المخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة",'TU-MUS-26-MA'] },
+    { label: "الملابس والمقتنيات التراثية", keys: ["ملبوس", "ملابس", "ثوب", "عباءة", "عمامة", "لباس","TU-MUS-26-CL"] },
+    { label: "الأدوات المنزلية التراثية", keys: ["أدوات منزلية", "منزل", "هاون", "مهراس", "جرن", "رحى", "طهي","TU-MUS-26-ST"] },
+    { label: "الأدوات المنزلية الحجرية", keys: ["أدوات حجرية منزلية","TU-MUS-26-ST"] },
+    { label: "الحلي والمصوغات", keys: ["زينة", "حلي", "قلادة", "خاتم", "سوار", "تزيين","TU-MUS-26-JE"] },
+    { label: "الأسلحة", keys: ["سلاح", "أسلحة", "ولاعة","بنادق","ذخيرة",'حرب',"عسكر",'TU-MUS-26-WE'] },
+    { label: "أدوات الإتصال", keys: ["اتصال", "جهاز","TU-MUS-26-TE"] },
+    { label: "أدوات زراعية", keys: ["زرع","TU-MUS-26-AG"] },
+    { label: "الأدوات الخشبية والمعمارية", keys: [ "معمار","TU-MUS-26-WO"] },
+    { label: "الآلات الموسيقية", keys: [ "موسيق", "يقاع","TU-MUS-26-MU"] },
   ];
   const matched = [];
   for (const rule of rules) {
@@ -183,7 +200,7 @@ function getRawGeneralClassificationText(item) {
   ];
   for (const [key, value] of allEntries) {
     const normalizedKey = normalizeArabicKey(key);
-    if (normalizedKey.includes("تصنيف") ) {
+    if (normalizedKey.includes("تسجيل") || normalizedKey.includes("تصنيف") ) {
       const textValue = String(value || "").trim();
       if (textValue) values.push(textValue);
     }
@@ -344,11 +361,71 @@ function populateSourceRegionFilter() {
     ).join("");
 }
 
+function readItemIdFromSearch() {
+  return new URLSearchParams(window.location.search).get("id");
+}
+
+function updateBrowseLayout() {
+  const detailOpen = state.activeId != null;
+  if (browseSection) {
+    browseSection.classList.toggle("xl:grid-cols-1", !detailOpen);
+    browseSection.classList.toggle("xl:grid-cols-[minmax(380px,28vw)_minmax(0,1fr)]", detailOpen);
+  }
+  if (detailsPanel) {
+    detailsPanel.classList.toggle("hidden", !detailOpen);
+  }
+  // Items grid: 4/3/2/1 when browsing only; 3/2/1 when a detail is open (narrower sidebar).
+  if (itemsList) {
+    itemsList.classList.toggle("xl:grid-cols-4", !detailOpen);
+  }
+}
+
+function writeItemIdToUrl(id, { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  if (id != null && id !== "") {
+    url.searchParams.set("id", String(id));
+  } else {
+    url.searchParams.delete("id");
+  }
+  const method = replace ? "replaceState" : "pushState";
+  history[method]({ itemId: id != null ? String(id) : "" }, "", url);
+}
+
 function applyFilters() {
   state.filtered = filterItems(searchInput.value);
-  state.activeId = state.filtered[0]?.id || null;
-  renderList();
+  const stillActive =
+    state.activeId != null &&
+    state.filtered.some((x) => String(x.id) === String(state.activeId));
+  if (!stillActive) {
+    state.activeId = null;
+    writeItemIdToUrl(null, { replace: true });
+  }
+  renderList({ preserveScroll: false });
   renderDetails();
+}
+
+/** After detail panel + grid reflow, re-apply list scroll (see renderList preserveScroll). */
+function restoreItemsListScrollAfterLayout() {
+  if (!itemsList || itemsList.dataset.pendingScroll == null) return;
+  const y = Number(itemsList.dataset.pendingScroll);
+  delete itemsList.dataset.pendingScroll;
+  const apply = () => {
+    if (itemsList) itemsList.scrollTop = y;
+  };
+  apply();
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
+
+function setActiveItem(id, { replaceHistory = false } = {}) {
+  if (String(state.activeId) === String(id)) return;
+  state.activeId = id;
+  writeItemIdToUrl(id, { replace: replaceHistory });
+  renderList({ preserveScroll: true });
+  renderDetails();
+  restoreItemsListScrollAfterLayout();
 }
 
 function resetAllFilters() {
@@ -356,7 +433,79 @@ function resetAllFilters() {
   generalClassificationFilter.value = "";
   sourceRegionFilter.value = "";
   timePeriodFilter.value = "";
+  state.activeId = null;
+  writeItemIdToUrl(null, { replace: true });
   applyFilters();
+}
+
+function shouldShowCategoryOverview() {
+  if (state.activeId != null) return false;
+  if (searchInput.value.trim()) return false;
+  if ((generalClassificationFilter?.value || "").trim()) return false;
+  if ((sourceRegionFilter?.value || "").trim()) return false;
+  if ((timePeriodFilter?.value || "").trim()) return false;
+  return true;
+}
+
+function getFirstItemsForGeneralCategory(categoryLabel, limit = 4) {
+  const target = normalizeTagValue(categoryLabel);
+  if (!target) return [];
+  const out = [];
+  for (const item of state.items) {
+    const classes = getItemGeneralClassifications(item).map((c) => normalizeTagValue(c));
+    if (classes.includes(target)) {
+      out.push(item);
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
+function countItemsForGeneralCategory(categoryLabel) {
+  const target = normalizeTagValue(categoryLabel);
+  if (!target) return 0;
+  let n = 0;
+  for (const item of state.items) {
+    const classes = getItemGeneralClassifications(item).map((c) => normalizeTagValue(c));
+    if (classes.includes(target)) n += 1;
+  }
+  return n;
+}
+
+function renderCategoryOverviewList() {
+  resultCount.textContent = `${BASE_GENERAL_CATEGORIES.length} تصنيف`;
+  itemsList.innerHTML = BASE_GENERAL_CATEGORIES.map((cat) => {
+    const count = countItemsForGeneralCategory(cat);
+    const previewItems = getFirstItemsForGeneralCategory(cat, 4);
+    const filterVal = normalizeTagValue(cat);
+    const activeClass = "border-violet-200 bg-white hover:bg-violet-200/90";
+    const fourCells = [0, 1, 2, 3]
+      .map((i) => {
+        const piece = previewItems[i];
+        if (!piece) {
+          return `<div class="aspect-square w-full rounded-md border border-dashed border-violet-200/70 bg-violet-50/60"></div>`;
+        }
+        const thumb = resolveAssetPath(piece.primaryImage);
+        if (thumb) {
+          return `<img class="aspect-square h-full w-full rounded-md border border-fuchsia-200/90 object-cover shadow-sm" src="${escapeHtml(thumb)}" alt="" draggable="false" />`;
+        }
+        return `<div class="aspect-square w-full rounded-md border border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50"></div>`;
+      })
+      .join("");
+    return `
+        <li class="flex min-w-0 cursor-pointer select-none flex-col rounded-xl border p-2 transition ${activeClass}" data-category-filter="${escapeHtml(filterVal)}">
+          <div class="mb-1.5 mt-3 mb-3 text-center text-lg font-extrabold leading-tight text-violet-800">${escapeHtml(cat)} (${count})</div>
+          <div class="grid w-full grid-cols-2 gap-1.5">${fourCells}</div>
+        </li>
+      `;
+  }).join("");
+
+  for (const li of itemsList.querySelectorAll("li[data-category-filter]")) {
+    li.addEventListener("click", () => {
+      generalClassificationFilter.value = li.getAttribute("data-category-filter") || "";
+      applyFilters();
+    });
+  }
 }
 
 function populateTimePeriodFilter() {
@@ -380,12 +529,31 @@ function populateTimePeriodFilter() {
       .join("");
 }
 
-function renderList() {
+function renderList(options = {}) {
+  const preserveScroll = options.preserveScroll === true;
+  const showCategoryOverview = shouldShowCategoryOverview();
+  const scrollBefore =
+    preserveScroll && itemsList && !showCategoryOverview && state.filtered.length
+      ? itemsList.scrollTop
+      : null;
+
+  if (showCategoryOverview) {
+    renderCategoryOverviewList();
+    return;
+  }
+
   if (!state.filtered.length) {
     itemsList.innerHTML =
-      "<li class='p-4 text-sm font-medium text-slate-500'>لا توجد نتائج مطابقة للفلاتر الحالية.</li>";
+      "<li class='col-span-full p-4 text-sm font-medium text-slate-500'>لا توجد نتائج مطابقة للفلاتر الحالية.</li>";
     resultCount.textContent = "0 نتيجة";
-    detailsPanel.innerHTML = "<p class='text-slate-500'>لا توجد عناصر مطابقة للبحث.</p>";
+    const fallbackItem =
+      state.activeId != null ? state.items.find((x) => String(x.id) === String(state.activeId)) : null;
+    if (fallbackItem) {
+      renderDetails();
+    } else {
+      detailsPanel.innerHTML = "";
+      updateBrowseLayout();
+    }
     return;
   }
 
@@ -394,21 +562,18 @@ function renderList() {
     .map((item) => {
       const thumb = resolveAssetPath(item.primaryImage);
       const activeClass =
-        item.id === state.activeId
+        String(item.id) === String(state.activeId)
           ? "bg-gradient-to-r from-fuchsia-50 to-indigo-50 border-fuchsia-200 shadow-sm"
           : "bg-white border-transparent hover:bg-fuchsia-50/40";
       return `
-        <li class="cursor-pointer border-b border-fuchsia-100 p-2.5 sm:p-3 transition ${activeClass}" data-item-id="${escapeHtml(item.id)}">
+        <li class="flex min-w-0 cursor-pointer select-none flex-col rounded-xl border border-fuchsia-100 p-2 transition ${activeClass}" data-item-id="${escapeHtml(item.id)}">
           ${
             thumb
-              ? `<img class="mb-2 h-24 sm:h-28 w-full rounded-xl sm:rounded-2xl border border-fuchsia-200 object-cover shadow-sm" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.title)}" />`
-              : `<div class="mb-2 h-24 sm:h-28 w-full rounded-xl sm:rounded-2xl border border-dashed border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50"></div>`
+              ? `<img class="mb-1.5 aspect-square h-auto w-full rounded-lg border border-fuchsia-200 object-cover shadow-sm" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.title)}" draggable="false" />`
+              : `<div class="mb-1.5 aspect-square w-full rounded-lg border border-dashed border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50"></div>`
           }
-          <div>
-            
-            <a class="mt-2 inline-block text-xs font-bold text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-fuchsia-600" href="./item.html?id=${encodeURIComponent(item.id)}">
-            <h3 class="text-sm font-extrabold leading-5 sm:leading-6 text-slate-800">${escapeHtml(item.title || "بدون عنوان")}</h3>
-            </a>
+          <div class="min-w-0">
+            <h3 class="line-clamp-2 text-[11px] font-extrabold leading-snug text-slate-800 sm:text-xs">${escapeHtml(item.title || "بدون عنوان")}</h3>
           </div>
         </li>
       `;
@@ -417,9 +582,15 @@ function renderList() {
 
   for (const li of itemsList.querySelectorAll("li[data-item-id]")) {
     li.addEventListener("click", () => {
-      state.activeId = li.getAttribute("data-item-id");
-      renderList();
-      renderDetails();
+      setActiveItem(li.getAttribute("data-item-id"), { replaceHistory: false });
+    });
+  }
+
+  if (scrollBefore !== null && itemsList) {
+    itemsList.dataset.pendingScroll = String(scrollBefore);
+    itemsList.scrollTop = scrollBefore;
+    requestAnimationFrame(() => {
+      if (itemsList) itemsList.scrollTop = scrollBefore;
     });
   }
 }
@@ -472,17 +643,153 @@ function renderRows(fieldsObj = {}) {
     .join("");
 }
 
+function clampDetailZoom(value) {
+  return Math.min(DETAIL_ZOOM_MAX, Math.max(DETAIL_ZOOM_MIN, value));
+}
+
+function setupDetailsImageZoom() {
+  detailsImageZoomAbort = new AbortController();
+  const { signal } = detailsImageZoomAbort;
+
+  const zoomableImage = document.getElementById("detailMainImage");
+  if (!zoomableImage) return;
+
+  const zoomInButton = document.getElementById("detailZoomInButton");
+  const zoomOutButton = document.getElementById("detailZoomOutButton");
+  const zoomResetButton = document.getElementById("detailZoomResetButton");
+  const zoomLabel = document.getElementById("detailZoomLevelLabel");
+
+  if (!zoomInButton || !zoomOutButton || !zoomResetButton || !zoomLabel) return;
+
+  zoomableImage.style.willChange = "transform";
+
+  let currentZoom = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  const updateTransform = () => {
+    zoomableImage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${currentZoom})`;
+    zoomableImage.style.transformOrigin = "center center";
+  };
+
+  const setPanMode = () => {
+    if (currentZoom > DETAIL_ZOOM_MIN) {
+      zoomableImage.classList.add("cursor-grab");
+      zoomableImage.classList.remove("cursor-default");
+    } else {
+      zoomableImage.classList.remove("cursor-grab", "cursor-grabbing");
+      zoomableImage.classList.add("cursor-default");
+    }
+  };
+
+  const applyZoom = (nextZoom) => {
+    currentZoom = clampDetailZoom(nextZoom);
+    if (currentZoom <= DETAIL_ZOOM_MIN) {
+      offsetX = 0;
+      offsetY = 0;
+      isDragging = false;
+    }
+    updateTransform();
+    setPanMode();
+    zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+    zoomOutButton.disabled = currentZoom <= DETAIL_ZOOM_MIN;
+    zoomInButton.disabled = currentZoom >= DETAIL_ZOOM_MAX;
+    zoomOutButton.classList.toggle("opacity-50", zoomOutButton.disabled);
+    zoomOutButton.classList.toggle("cursor-not-allowed", zoomOutButton.disabled);
+    zoomInButton.classList.toggle("opacity-50", zoomInButton.disabled);
+    zoomInButton.classList.toggle("cursor-not-allowed", zoomInButton.disabled);
+  };
+
+  zoomInButton.addEventListener("click", () => applyZoom(currentZoom + DETAIL_ZOOM_STEP), { signal });
+  zoomOutButton.addEventListener("click", () => applyZoom(currentZoom - DETAIL_ZOOM_STEP), { signal });
+  zoomResetButton.addEventListener("click", () => applyZoom(1), { signal });
+
+  const startDrag = (clientX, clientY) => {
+    if (currentZoom <= DETAIL_ZOOM_MIN) return;
+    isDragging = true;
+    dragStartX = clientX - offsetX;
+    dragStartY = clientY - offsetY;
+    zoomableImage.classList.remove("cursor-grab");
+    zoomableImage.classList.add("cursor-grabbing");
+  };
+
+  const dragMove = (clientX, clientY) => {
+    if (!isDragging) return;
+    offsetX = clientX - dragStartX;
+    offsetY = clientY - dragStartY;
+    updateTransform();
+  };
+
+  const endDrag = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    zoomableImage.classList.remove("cursor-grabbing");
+    if (currentZoom > DETAIL_ZOOM_MIN) {
+      zoomableImage.classList.add("cursor-grab");
+    }
+  };
+
+  zoomableImage.draggable = false;
+  zoomableImage.addEventListener(
+    "mousedown",
+    (event) => {
+      event.preventDefault();
+      startDrag(event.clientX, event.clientY);
+    },
+    { signal }
+  );
+  window.addEventListener("mousemove", (event) => dragMove(event.clientX, event.clientY), { signal });
+  window.addEventListener("mouseup", endDrag, { signal });
+  zoomableImage.addEventListener("mouseleave", endDrag, { signal });
+  zoomableImage.addEventListener(
+    "touchstart",
+    (event) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      startDrag(touch.clientX, touch.clientY);
+    },
+    { signal }
+  );
+  window.addEventListener(
+    "touchmove",
+    (event) => {
+      const touch = event.touches[0];
+      if (!touch || !isDragging) return;
+      event.preventDefault();
+      dragMove(touch.clientX, touch.clientY);
+    },
+    { passive: false, signal }
+  );
+  window.addEventListener("touchend", endDrag, { signal });
+  window.addEventListener("touchcancel", endDrag, { signal });
+
+  applyZoom(1);
+}
+
 function renderDetails() {
-  const item = state.filtered.find((x) => x.id === state.activeId) || state.filtered[0];
+  teardownDetailsImageZoom();
+  if (state.activeId == null) {
+    detailsPanel.innerHTML = "";
+    updateBrowseLayout();
+    return;
+  }
+  const fromFiltered = state.filtered.find((x) => String(x.id) === String(state.activeId));
+  const fromAll = state.items.find((x) => String(x.id) === String(state.activeId));
+  const item = fromFiltered || fromAll;
   if (!item) {
-    detailsPanel.innerHTML = "<p class='text-slate-500'>اختر قطعة من القائمة لعرض التفاصيل.</p>";
+    detailsPanel.innerHTML = "<p class='text-slate-500'>لم يتم العثور على القطعة المحددة.</p>";
+    detailsPanel.scrollTop = 0;
+    updateBrowseLayout();
     return;
   }
   state.activeId = item.id;
 
   const mainImage = resolveAssetPath(item.primaryImage);
-  const qrImage = resolveAssetPath(item.qr);
   const urls = item.urls || [];
+  const itemPageUrl = new URL(`./index.html?id=${encodeURIComponent(item.id)}`, window.location.href).href;
 
   const description = item.description
     ? `<pre class="whitespace-pre-wrap rounded-xl sm:rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-3 sm:p-4 text-sm leading-6 sm:leading-7 text-slate-700">${escapeHtml(item.description)}</pre>`
@@ -491,12 +798,31 @@ function renderDetails() {
   detailsPanel.innerHTML = `
     
     <div class="mb-3">
-      <a class="" href="./item.html?id=${encodeURIComponent(item.id)}">
       <h2 class="mb-3 sm:mb-4 bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-xl sm:text-2xl font-extrabold leading-8 sm:leading-10 text-transparent">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
-      </a>
     </div>
-    ${mainImage ? `<img class="mb-3 sm:mb-4 max-h-[300px] sm:max-h-[420px] w-full rounded-2xl sm:rounded-3xl border border-fuchsia-200 object-contain bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />` : ""}
-
+    ${
+      mainImage
+        ? `<div class="mb-4">
+             <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-fuchsia-200 bg-white/90 p-2 shadow-sm">
+               <span class="text-xs font-bold text-slate-600">تكبير الصورة</span>
+               <div class="flex items-center gap-2">
+                 <button id="detailZoomInButton" type="button" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100">+</button>
+                 <button id="detailZoomOutButton" type="button" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100">-</button>
+                 <button id="detailZoomResetButton" type="button" class="rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-1 text-xs font-bold text-fuchsia-700 transition hover:bg-fuchsia-100">إعادة</button>
+                 <span id="detailZoomLevelLabel" class="min-w-12 text-center text-xs font-bold text-slate-500">100%</span>
+               </div>
+             </div>
+             <div class="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm">
+               <img id="detailMainImage" class="mx-auto block w-full max-h-[min(420px,50vh)] cursor-default select-none object-contain touch-none sm:max-h-[min(480px,55vh)]" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />
+               <div class="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[9.5rem] rounded-lg border border-emerald-200/95 bg-white/95 p-2 shadow-lg backdrop-blur-sm sm:bottom-3 sm:left-3">
+                 <p class="mb-1.5 text-[10px] font-bold leading-tight text-emerald-700">QR — رابط الصفحة</p>
+                 <div id="itemDetailQr" class="rounded-md bg-white leading-none" aria-hidden="true"></div>
+                 <p id="itemDetailQrCaption" class="mt-1.5 max-w-full truncate text-center text-[9px] font-semibold text-emerald-800" title=""></p>
+               </div>
+             </div>
+           </div>`
+        : ""
+    }
     <h3 class="mb-2 text-lg font-extrabold text-fuchsia-700">الوصف</h3>
     ${description}
 
@@ -525,15 +851,35 @@ function renderDetails() {
           : "<p class='text-sm text-slate-500'>لا توجد روابط.</p>"
       }
       ${
-        qrImage
+        !mainImage
           ? `<div class="mt-4 inline-block rounded-xl sm:rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-2.5 sm:p-3 shadow-sm">
-               <p class="mb-2 text-xs font-bold text-emerald-700">QR</p>
-               <img class="h-32 w-32 sm:h-40 sm:w-40 rounded-lg" src="${escapeHtml(qrImage)}" alt="QR ${escapeHtml(item.title)}" />
+               <p class="mb-2 text-xs font-bold text-emerald-700">QR — رابط صفحة القطعة</p>
+               <div id="itemDetailQr" class="rounded-lg bg-white leading-none" aria-hidden="true"></div>
+               <p id="itemDetailQrCaption" class="mt-2 max-w-[16rem] truncate text-center text-[10px] font-semibold text-emerald-800" title=""></p>
              </div>`
           : ""
       }
     </div>
   `;
+
+  const qrSize = mainImage ? { width: 96, height: 96, colorDark: "#065f46" } : { width: 144, height: 144, colorDark: "#065f46" };
+  mountQrCode("itemDetailQr", itemPageUrl, qrSize);
+  const detailQrCaption = document.getElementById("itemDetailQrCaption");
+  if (detailQrCaption) {
+    detailQrCaption.setAttribute("title", itemPageUrl);
+  }
+  if (mainImage) {
+    setupDetailsImageZoom();
+  }
+  updateBrowseLayout();
+  const scrollDetailsToTop = () => {
+    if (detailsPanel) detailsPanel.scrollTop = 0;
+  };
+  scrollDetailsToTop();
+  requestAnimationFrame(() => {
+    scrollDetailsToTop();
+    requestAnimationFrame(scrollDetailsToTop);
+  });
 }
 
 async function init() {
@@ -541,11 +887,31 @@ async function init() {
   populateGeneralClassificationFilter();
   populateSourceRegionFilter();
   populateTimePeriodFilter();
-  state.filtered = [...state.items];
-  state.activeId = state.filtered[0]?.id || null;
+  state.filtered = filterItems(searchInput.value);
 
-  renderList();
+  const routeId = readItemIdFromSearch();
+  if (routeId && state.items.some((x) => String(x.id) === String(routeId))) {
+    state.activeId = routeId;
+  } else {
+    state.activeId = null;
+  }
+
+  writeItemIdToUrl(state.activeId, { replace: true });
+
+  renderList({ preserveScroll: false });
   renderDetails();
+
+  window.addEventListener("popstate", () => {
+    const id = readItemIdFromSearch();
+    if (id && state.items.some((x) => String(x.id) === String(id))) {
+      state.activeId = id;
+    } else {
+      state.activeId = null;
+    }
+    renderList({ preserveScroll: true });
+    renderDetails();
+    restoreItemsListScrollAfterLayout();
+  });
 
   searchInput.addEventListener("input", applyFilters);
   generalClassificationFilter.addEventListener("change", applyFilters);
@@ -556,6 +922,7 @@ async function init() {
 
 init().catch((error) => {
   console.error(error);
+  detailsPanel.classList.remove("hidden");
   detailsPanel.innerHTML =
     "<p class='text-sm text-red-600'>فشل تحميل البيانات. نفّذ أمر الاستخراج أولاً ثم أعد تحميل الصفحة.</p>";
 });
