@@ -8,12 +8,17 @@ const ADMIN_STORAGE_KEY = "museum_items_override_v1";
 const itemsList = document.getElementById("itemsList");
 const detailsPanel = document.getElementById("detailsPanel");
 const browseSection = document.getElementById("browseSection");
+const itemsPane = document.getElementById("itemsPane");
 const searchInput = document.getElementById("searchInput");
 const generalClassificationFilter = document.getElementById("generalClassificationFilter");
 const sourceRegionFilter = document.getElementById("sourceRegionFilter");
 const timePeriodFilter = document.getElementById("timePeriodFilter");
 const resultCount = document.getElementById("resultCount");
 const resetFiltersBtn = document.getElementById("resetFiltersBtn");
+const filtersPanel = document.getElementById("filtersPanel");
+const mobileFiltersOpenBtn = document.getElementById("mobileFiltersOpenBtn");
+const mobileFiltersCloseBtn = document.getElementById("mobileFiltersCloseBtn");
+const mobileFiltersBackdrop = document.getElementById("mobileFiltersBackdrop");
 
 const DETAIL_ZOOM_MIN = 1;
 const DETAIL_ZOOM_MAX = 3;
@@ -367,9 +372,14 @@ function readItemIdFromSearch() {
 
 function updateBrowseLayout() {
   const detailOpen = state.activeId != null;
+  const isSmallScreen = window.matchMedia("(max-width: 639px)").matches;
   if (browseSection) {
     browseSection.classList.toggle("xl:grid-cols-1", !detailOpen);
     browseSection.classList.toggle("xl:grid-cols-[minmax(380px,28vw)_minmax(0,1fr)]", detailOpen);
+  }
+  if (itemsPane) {
+    // On small screens, show either list or details (not both) after selecting an item.
+    itemsPane.classList.toggle("hidden", detailOpen && isSmallScreen);
   }
   if (detailsPanel) {
     detailsPanel.classList.toggle("hidden", !detailOpen);
@@ -389,6 +399,33 @@ function writeItemIdToUrl(id, { replace = false } = {}) {
   }
   const method = replace ? "replaceState" : "pushState";
   history[method]({ itemId: id != null ? String(id) : "" }, "", url);
+}
+
+function setupMobileFiltersDrawer() {
+  if (!filtersPanel || !mobileFiltersOpenBtn || !mobileFiltersBackdrop) return;
+
+  const setOpenState = (isOpen) => {
+    filtersPanel.classList.toggle("translate-x-full", !isOpen);
+    filtersPanel.classList.toggle("translate-x-0", isOpen);
+    mobileFiltersBackdrop.classList.toggle("hidden", !isOpen);
+    document.body.classList.toggle("overflow-hidden", isOpen);
+    mobileFiltersOpenBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  };
+
+  const closeDrawer = () => setOpenState(false);
+  const openDrawer = () => setOpenState(true);
+
+  mobileFiltersOpenBtn.addEventListener("click", openDrawer);
+  mobileFiltersBackdrop.addEventListener("click", closeDrawer);
+  if (mobileFiltersCloseBtn) {
+    mobileFiltersCloseBtn.addEventListener("click", closeDrawer);
+  }
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeDrawer();
+  });
+  window.addEventListener("resize", () => {
+    if (window.innerWidth >= 640) closeDrawer();
+  });
 }
 
 function applyFilters() {
@@ -818,7 +855,9 @@ function renderDetails() {
     : "<p class='text-sm text-slate-500'>لا يوجد وصف متاح.</p>";
 
   detailsPanel.innerHTML = `
-    
+    <button id="mobileBackToListBtn" type="button" class="mb-3 inline-flex items-center rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 shadow-sm sm:hidden">
+      العودة إلى القائمة
+    </button>
     <div class="mb-3">
       <h2 class="mb-3 sm:mb-4 bg-gradient-to-r from-fuchsia-600 to-indigo-600 bg-clip-text text-xl sm:text-2xl font-extrabold leading-8 sm:leading-10 text-transparent">${escapeHtml(item.name || item.title || "بدون عنوان")}</h2>
     </div>
@@ -845,12 +884,11 @@ function renderDetails() {
            </div>`
         : ""
     }
-    <h3 class="mb-2 text-lg font-extrabold text-fuchsia-700">الوصف</h3>
-    ${description}
+    
 
     ${
       Object.keys(item.fields || {}).length
-        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-indigo-700">معلومات إضافية</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.fields)}</div>`
+        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-indigo-700">معلومات القطعة</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.fields)}</div>`
         : ""
     }
 
@@ -869,6 +907,16 @@ function renderDetails() {
   if (detailQrCaption) {
     detailQrCaption.setAttribute("title", itemPageUrl);
   }
+  const mobileBackToListBtn = document.getElementById("mobileBackToListBtn");
+  if (mobileBackToListBtn) {
+    mobileBackToListBtn.addEventListener("click", () => {
+      state.activeId = null;
+      writeItemIdToUrl(null);
+      renderList({ preserveScroll: true });
+      renderDetails();
+      restoreItemsListScrollAfterLayout();
+    });
+  }
   if (mainImage) {
     setupDetailsImageZoom();
   }
@@ -884,6 +932,7 @@ function renderDetails() {
 }
 
 async function init() {
+  setupMobileFiltersDrawer();
   state.items = await loadItems();
   populateGeneralClassificationFilter();
   populateSourceRegionFilter();
@@ -913,6 +962,7 @@ async function init() {
     renderDetails();
     restoreItemsListScrollAfterLayout();
   });
+  window.addEventListener("resize", updateBrowseLayout);
 
   searchInput.addEventListener("input", applyFilters);
   generalClassificationFilter.addEventListener("change", applyFilters);
