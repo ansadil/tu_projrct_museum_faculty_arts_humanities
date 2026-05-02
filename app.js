@@ -180,7 +180,7 @@ function inferGeneralClassificationsByRules(item) {
     { label: "الأسلحة", keys: ["سلاح", "أسلحة", "ولاعة","بنادق","ذخيرة",'حرب',"عسكر",'TU-MUS-26-WE'] },
     { label: "أدوات الإتصال", keys: ["اتصال", "جهاز","TU-MUS-26-TE"] },
     { label: "أدوات زراعية", keys: ["زرع","TU-MUS-26-AG"] },
-    { label: "الأدوات الخشبية والمعمارية", keys: [ "معمار","TU-MUS-26-WO"] },
+    { label: "الأدوات الخشبية والمعمارية", keys: [ "TU-MUS-26-WO"] },
     { label: "الآلات الموسيقية", keys: [ "موسيق", "يقاع","TU-MUS-26-MU"] },
   ];
   const matched = [];
@@ -669,6 +669,18 @@ function setupDetailsImageZoom() {
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
+  /** When set, pointer events for this id are handling zoom-pan (avoids window-level touchmove). */
+  let activePanPointerId = null;
+
+  const releasePanPointer = () => {
+    if (activePanPointerId == null) return;
+    try {
+      zoomableImage.releasePointerCapture(activePanPointerId);
+    } catch (_) {
+      /* already released */
+    }
+    activePanPointerId = null;
+  };
 
   const updateTransform = () => {
     zoomableImage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${currentZoom})`;
@@ -679,9 +691,15 @@ function setupDetailsImageZoom() {
     if (currentZoom > DETAIL_ZOOM_MIN) {
       zoomableImage.classList.add("cursor-grab");
       zoomableImage.classList.remove("cursor-default");
+      // Own panning when zoomed; block native touch-scroll on the image.
+      zoomableImage.classList.remove("touch-pan-y");
+      zoomableImage.classList.add("touch-none");
     } else {
       zoomableImage.classList.remove("cursor-grab", "cursor-grabbing");
       zoomableImage.classList.add("cursor-default");
+      // Let vertical scroll pass through to #detailsPanel (touch-none blocks ancestor scroll).
+      zoomableImage.classList.remove("touch-none");
+      zoomableImage.classList.add("touch-pan-y");
     }
   };
 
@@ -691,6 +709,7 @@ function setupDetailsImageZoom() {
       offsetX = 0;
       offsetY = 0;
       isDragging = false;
+      releasePanPointer();
     }
     updateTransform();
     setPanMode();
@@ -733,38 +752,41 @@ function setupDetailsImageZoom() {
   };
 
   zoomableImage.draggable = false;
-  zoomableImage.addEventListener(
-    "mousedown",
-    (event) => {
-      event.preventDefault();
-      startDrag(event.clientX, event.clientY);
-    },
-    { signal }
-  );
-  window.addEventListener("mousemove", (event) => dragMove(event.clientX, event.clientY), { signal });
-  window.addEventListener("mouseup", endDrag, { signal });
-  zoomableImage.addEventListener("mouseleave", endDrag, { signal });
-  zoomableImage.addEventListener(
-    "touchstart",
-    (event) => {
-      const touch = event.touches[0];
-      if (!touch) return;
-      startDrag(touch.clientX, touch.clientY);
-    },
-    { signal }
-  );
-  window.addEventListener(
-    "touchmove",
-    (event) => {
-      const touch = event.touches[0];
-      if (!touch || !isDragging) return;
-      event.preventDefault();
-      dragMove(touch.clientX, touch.clientY);
-    },
-    { passive: false, signal }
-  );
-  window.addEventListener("touchend", endDrag, { signal });
-  window.addEventListener("touchcancel", endDrag, { signal });
+
+  const onPointerDown = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (currentZoom <= DETAIL_ZOOM_MIN) return;
+    event.preventDefault();
+    try {
+      zoomableImage.setPointerCapture(event.pointerId);
+    } catch (_) {
+      /* setPointerCapture unsupported or failed */
+    }
+    activePanPointerId = event.pointerId;
+    startDrag(event.clientX, event.clientY);
+  };
+
+  const onPointerMove = (event) => {
+    if (activePanPointerId != null && event.pointerId !== activePanPointerId) return;
+    if (!isDragging) return;
+    event.preventDefault();
+    dragMove(event.clientX, event.clientY);
+  };
+
+  const onPointerUp = (event) => {
+    if (activePanPointerId != null && event.pointerId !== activePanPointerId) return;
+    releasePanPointer();
+    endDrag();
+  };
+
+  zoomableImage.addEventListener("pointerdown", onPointerDown, { signal });
+  zoomableImage.addEventListener("pointermove", onPointerMove, { passive: false, signal });
+  zoomableImage.addEventListener("pointerup", onPointerUp, { signal });
+  zoomableImage.addEventListener("pointercancel", onPointerUp, { signal });
+  zoomableImage.addEventListener("lostpointercapture", () => {
+    activePanPointerId = null;
+    endDrag();
+  }, { signal });
 
   applyZoom(1);
 }
@@ -813,7 +835,7 @@ function renderDetails() {
                </div>
              </div>
              <div class="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm">
-               <img id="detailMainImage" class="mx-auto block w-full max-h-[min(420px,50vh)] cursor-default select-none object-contain touch-none sm:max-h-[min(480px,55vh)]" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />
+               <img id="detailMainImage" class="mx-auto block w-full max-h-[min(420px,50vh)] cursor-default select-none object-contain touch-pan-y sm:max-h-[min(480px,55vh)]" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />
                <div class="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[9.5rem] rounded-lg border border-emerald-200/95 bg-white/95 p-2 shadow-lg backdrop-blur-sm sm:bottom-3 sm:left-3">
                  <p class="mb-1.5 text-[10px] font-bold leading-tight text-emerald-700">QR — رابط الصفحة</p>
                  <div id="itemDetailQr" class="rounded-md bg-white leading-none" aria-hidden="true"></div>
@@ -838,28 +860,7 @@ function renderDetails() {
         : ""
     }
 
-    <div class="mt-5">
-      <h3 class="mb-2 text-lg font-extrabold text-emerald-700">الروابط</h3>
-      ${
-        urls.length
-          ? urls
-              .map(
-                (url) =>
-                  `<p class="mb-2"><a class="break-all text-sm font-bold text-indigo-600 underline decoration-indigo-300 underline-offset-4 hover:text-fuchsia-600" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></p>`
-              )
-              .join("")
-          : "<p class='text-sm text-slate-500'>لا توجد روابط.</p>"
-      }
-      ${
-        !mainImage
-          ? `<div class="mt-4 inline-block rounded-xl sm:rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-cyan-50 p-2.5 sm:p-3 shadow-sm">
-               <p class="mb-2 text-xs font-bold text-emerald-700">QR — رابط صفحة القطعة</p>
-               <div id="itemDetailQr" class="rounded-lg bg-white leading-none" aria-hidden="true"></div>
-               <p id="itemDetailQrCaption" class="mt-2 max-w-[16rem] truncate text-center text-[10px] font-semibold text-emerald-800" title=""></p>
-             </div>`
-          : ""
-      }
-    </div>
+    
   `;
 
   const qrSize = mainImage ? { width: 96, height: 96, colorDark: "#065f46" } : { width: 144, height: 144, colorDark: "#065f46" };
