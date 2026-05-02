@@ -174,7 +174,7 @@ function inferGeneralClassificationsByRules(item) {
   const rules = [
     { label: "الفخاريات", keys: ["فخار", "خزف", "فخ","TU-MUS-26-PO"] },
     { label: "العينات الصخرية الطبيعية", keys: ["عينة", "صخور ", "أحجار",,"TU-MUS-26-NR"] },
-    { label: "أدوات إعداد القهوة", keys: ["قهوة","TU-MUS-26-SC"] },
+    { label: "أدوات إعداد القهوة", keys: ["TU-MUS-26-SC","TU-MUS-26 SC"] },
     { label: "النقود والعملات", keys: ["عملة", "عملات", "نقد", "دينار", "درهم", "ريال","TU-MUS-26-MC"] },
     { label: "النقوش العربية والرسوم الصخرية", keys: ["منقوش", "نقش", "نقوش", "نقشية", "كتابة حجرية","TU-MUS-26-IN"] },
     { label: "المخطوطات", keys: ["مخطوط", "مخطوطات", "وثيقة", "صحيفة", "جريدة",'TU-MUS-26-MA'] },
@@ -186,7 +186,7 @@ function inferGeneralClassificationsByRules(item) {
     { label: "أدوات الإتصال", keys: ["اتصال", "جهاز","TU-MUS-26-TE"] },
     { label: "أدوات زراعية", keys: ["زرع","TU-MUS-26-AG"] },
     { label: "الأدوات الخشبية والمعمارية", keys: [ "TU-MUS-26-WO"] },
-    { label: "الآلات الموسيقية", keys: [ "موسيق", "يقاع","TU-MUS-26-MU"] },
+    { label: "الآلات الموسيقية", keys: ["TU-MUS-26-MU"] },
   ];
   const matched = [];
   for (const rule of rules) {
