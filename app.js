@@ -875,10 +875,10 @@ function renderDetails() {
              </div>
              <div class="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-indigo-50 p-2 shadow-sm">
                <img id="detailMainImage" class="mx-auto block w-full max-h-[min(420px,50vh)] cursor-default select-none object-contain touch-pan-y sm:max-h-[min(480px,55vh)]" src="${escapeHtml(mainImage)}" alt="${escapeHtml(item.title)}" />
-               <div class="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[9.5rem] rounded-lg border border-emerald-200/95 bg-white/95 p-2 shadow-lg backdrop-blur-sm sm:bottom-3 sm:left-3">
-                 <p class="mb-1.5 text-[10px] font-bold leading-tight text-emerald-700">QR — رابط الصفحة</p>
-                 <div id="itemDetailQr" class="rounded-md bg-white leading-none" aria-hidden="true"></div>
-                 <p id="itemDetailQrCaption" class="mt-1.5 max-w-full truncate text-center text-[9px] font-semibold text-emerald-800" title=""></p>
+               <div class="pointer-events-none absolute bottom-2 left-2 z-10 hidden max-w-[9.5rem] rounded-lg border border-emerald-200/95 bg-white/95 p-2 shadow-lg backdrop-blur-sm sm:bottom-3 sm:left-3 sm:block">
+                 <p class="mb-1.5 text-[10px] font-bold leading-tight text-emerald-700">رمز الإستجابة السريع</p>
+                 <div id="itemDetailQrOverlay" class="rounded-md bg-white leading-none" aria-hidden="true"></div>
+                 <p id="itemDetailQrCaptionOverlay" class="mt-1.5 max-w-full truncate text-center text-[9px] font-semibold text-emerald-800" title=""></p>
                </div>
              </div>
            </div>`
@@ -897,15 +897,22 @@ function renderDetails() {
         ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-cyan-700">بيانات من ملف Excel</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.xlsx)}</div>`
         : ""
     }
-
-    
+    <div class="mt-5 flex flex-col items-center text-center sm:hidden">
+      <p class="mb-3 text-sm font-extrabold text-fuchsia-700">رمز الإستجابة السريع</p>
+      <div class="w-full max-w-[7.8rem] rounded-xl border border-emerald-200/95 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
+        <div id="itemDetailQrInline" class="mx-auto rounded-md bg-white leading-none" aria-hidden="true"></div>
+      </div>
+    </div>
   `;
 
   const qrSize = mainImage ? { width: 96, height: 96, colorDark: "#065f46" } : { width: 144, height: 144, colorDark: "#065f46" };
-  mountQrCode("itemDetailQr", itemPageUrl, qrSize);
-  const detailQrCaption = document.getElementById("itemDetailQrCaption");
-  if (detailQrCaption) {
-    detailQrCaption.setAttribute("title", itemPageUrl);
+  const qrOverlayEl = document.getElementById("itemDetailQrOverlay");
+  const qrInlineEl = document.getElementById("itemDetailQrInline");
+  if (qrOverlayEl) mountQrCode("itemDetailQrOverlay", itemPageUrl, qrSize);
+  if (qrInlineEl) mountQrCode("itemDetailQrInline", itemPageUrl, qrSize);
+  for (const captionId of ["itemDetailQrCaptionOverlay", "itemDetailQrCaptionInline"]) {
+    const el = document.getElementById(captionId);
+    if (el) el.setAttribute("title", itemPageUrl);
   }
   const mobileBackToListBtn = document.getElementById("mobileBackToListBtn");
   if (mobileBackToListBtn) {
