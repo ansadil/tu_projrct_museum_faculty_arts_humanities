@@ -465,6 +465,22 @@ function setActiveItem(id, { replaceHistory = false } = {}) {
   restoreItemsListScrollAfterLayout();
 }
 
+function scrollItemsListToItem(itemId) {
+  if (!itemsList || itemId == null) return;
+  const target = [...itemsList.querySelectorAll("li[data-item-id]")].find(
+    (li) => String(li.getAttribute("data-item-id")) === String(itemId)
+  );
+  if (!target) return;
+  const scrollToTarget = () => {
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  };
+  scrollToTarget();
+  requestAnimationFrame(() => {
+    scrollToTarget();
+    requestAnimationFrame(scrollToTarget);
+  });
+}
+
 function resetAllFilters() {
   searchInput.value = "";
   generalClassificationFilter.value = "";
@@ -568,7 +584,9 @@ function populateTimePeriodFilter() {
 
 function renderList(options = {}) {
   const preserveScroll = options.preserveScroll === true;
-  const showCategoryOverview = shouldShowCategoryOverview();
+  const scrollToItemId = options.scrollToItemId ?? null;
+  const forceItemsView = scrollToItemId != null;
+  const showCategoryOverview = !forceItemsView && shouldShowCategoryOverview();
   const scrollBefore =
     preserveScroll && itemsList && !showCategoryOverview && state.filtered.length
       ? itemsList.scrollTop
@@ -629,6 +647,9 @@ function renderList(options = {}) {
     requestAnimationFrame(() => {
       if (itemsList) itemsList.scrollTop = scrollBefore;
     });
+  }
+  if (scrollToItemId != null) {
+    scrollItemsListToItem(scrollToItemId);
   }
 }
 
@@ -917,10 +938,11 @@ function renderDetails() {
   const mobileBackToListBtn = document.getElementById("mobileBackToListBtn");
   if (mobileBackToListBtn) {
     mobileBackToListBtn.addEventListener("click", () => {
+      const currentId = state.activeId;
       state.activeId = null;
       writeItemIdToUrl(null);
-      renderList({ preserveScroll: true });
       renderDetails();
+      renderList({ preserveScroll: true, scrollToItemId: currentId });
       restoreItemsListScrollAfterLayout();
     });
   }
@@ -956,6 +978,9 @@ async function init() {
   writeItemIdToUrl(state.activeId, { replace: true });
 
   renderList({ preserveScroll: false });
+  if (state.activeId != null) {
+    scrollItemsListToItem(state.activeId);
+  }
   renderDetails();
 
   window.addEventListener("popstate", () => {
