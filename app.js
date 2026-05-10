@@ -1012,7 +1012,7 @@ function renderDetails() {
         if (!loc) return "";
         return `<div class="mt-5 w-full min-w-0 rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50 to-emerald-50 p-3 shadow-sm sm:p-4">
           <div class="mb-1 text-xs font-extrabold text-teal-800">${escapeHtml(MUSEUM_LOCATION_FIELD)}</div>
-          <div class="break-all font-mono text-base font-bold tracking-wide text-slate-800 sm:text-lg" dir="ltr">${escapeHtml(loc)}</div>
+          <div class="break-all font-mono text-base font-bold tracking-wide text-slate-800 sm:text-lg text-center" dir="ltr">${escapeHtml(loc)}</div>
           ${museumLocationLegendHtml()}
         </div>`;
       })()
