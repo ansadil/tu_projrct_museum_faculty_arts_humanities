@@ -62,6 +62,67 @@ const BASE_SOURCE_REGIONS = [
   "غير محدد",
 ];
 
+/** Detail panel: museum shelf / room code from `db/items.json`. */
+const MUSEUM_LOCATION_FIELD = "موقع القطعة بالمتحف";
+/** Order for "معلومات القطعة" cards (other keys follow, sorted by label). */
+const FIELD_DETAIL_PRIORITY = ["رقم التسجيل", MUSEUM_LOCATION_FIELD];
+
+/** Static legend for museum location codes (collapsed until user opens). */
+function museumLocationLegendHtml() {
+  return `
+    <details class="mt-3 w-full min-w-0 border-t border-teal-200/80 pt-2 text-start" dir="rtl">
+      <summary class="cursor-pointer text-center select-none list-none py-1 text-[11px] font-extrabold text-teal-900 underline decoration-teal-400 decoration-2 underline-offset-2 outline-none hover:text-teal-950 [&::-webkit-details-marker]:hidden">
+        شرح الرموز 
+      </summary>
+      <div class="pt-2 w-full">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6">
+          <div class="min-w-0">
+            <p class="mb-2 text-[11px] font-extrabold text-teal-900">مفتاح الرموز — عناصر المكان</p>
+            <ul class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] leading-relaxed text-slate-700">
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">H</span> قاعة (Hall)</li>
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">C</span> دولاب طولي (Cabinet)</li>
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">W</span> فاترينة عريضة (Wide showcase)</li>
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">S</span> رف (Shelf)</li>
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">T</span> منضدة (Table)</li>
+              <li class="min-w-0"><span class="inline-block min-w-[1.6rem] font-mono font-bold text-slate-900" dir="ltr">M</span> حائط (Wall-mounted)</li>
+            </ul>
+          </div>
+          <div class="min-w-0">
+            <p class="mb-2 text-[11px] font-extrabold text-teal-900">الإتجاهات داخل القاعة</p>
+            <ul class="grid grid-cols-1 gap-y-1 text-[11px] leading-relaxed text-slate-700 sm:grid-cols-3 sm:gap-x-2">
+              <li class="flex items-baseline justify-start gap-2 min-w-0" dir="rtl">
+                <span class="shrink-0 font-mono text-sm font-bold text-slate-900" dir="ltr">R</span>
+                <span>يمين</span>
+              </li>
+              <li class="flex items-baseline justify-start gap-2 min-w-0" dir="rtl">
+                <span class="shrink-0 font-mono text-sm font-bold text-slate-900" dir="ltr">L</span>
+                <span>يسار</span>
+              </li>
+              <li class="flex min-w-0 items-baseline justify-start gap-2" dir="rtl">
+                <span class="shrink-0 font-mono text-sm font-bold text-slate-900" dir="ltr">C</span>
+                <span>الوسط (Center)</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <p class="mt-3 text-[10px] leading-relaxed text-slate-500">ملاحظة: <span dir="ltr" class="font-mono">C</span> قبل رقم يعني دولاباً (مثل <span dir="ltr" class="font-mono">C1</span>)؛ في سياق الإتجاه يعني الوسط.</p>
+        <div class="mt-3 grid grid-cols-1 gap-3 border-t border-teal-200/60 pt-3 sm:grid-cols-2 sm:gap-4">
+          <div>
+            <p class="mb-1.5 text-[11px] font-extrabold text-teal-900">مثال</p>
+            <p class="font-mono text-base font-bold tracking-wide text-slate-900 sm:text-lg" dir="ltr">H1-R-C1-S1</p>
+          </div>
+          <ul class="grid grid-cols-1 gap-x-3 gap-y-0.5 text-[11px] leading-relaxed text-slate-600 sm:grid-cols-2">
+            <li class="min-w-0"><span class="font-mono font-semibold text-slate-800" dir="ltr">H1</span> — القاعة رقم 1</li>
+            <li class="min-w-0"><span class="font-mono font-semibold text-slate-800" dir="ltr">R</span> — باتجاه اليمين</li>
+            <li class="min-w-0"><span class="font-mono font-semibold text-slate-800" dir="ltr">C1</span> — الدولاب رقم 1</li>
+            <li class="min-w-0"><span class="font-mono font-semibold text-slate-800" dir="ltr">S1</span> — الرف رقم 1</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
 function resolveAssetPath(assetPath = "") {
   if (!assetPath) return "";
   if (/^https?:\/\//i.test(assetPath)) return assetPath;
@@ -678,15 +739,32 @@ async function loadItems() {
   return payload.items || [];
 }
 
-function renderRows(fieldsObj = {}) {
-  const rows = Object.entries(fieldsObj).filter(([key]) => {
-    const normalizedKey = String(key).toLowerCase();
-    return (
-      normalizedKey !== "url" &&
-      !normalizedKey.includes("http") &&
-      !normalizedKey.includes("رابط")
-    );
+function sortDetailFieldRows(rows) {
+  const rank = (key) => {
+    const i = FIELD_DETAIL_PRIORITY.indexOf(key);
+    return i === -1 ? FIELD_DETAIL_PRIORITY.length : i;
+  };
+  return [...rows].sort((a, b) => {
+    const d = rank(a[0]) - rank(b[0]);
+    if (d !== 0) return d;
+    return String(a[0]).localeCompare(String(b[0]), "ar");
   });
+}
+
+function renderRows(fieldsObj = {}, options = {}) {
+  const excludeKeys =
+    options.excludeKeys instanceof Set ? options.excludeKeys : new Set();
+  const rows = sortDetailFieldRows(
+    Object.entries(fieldsObj).filter(([key]) => {
+      if (excludeKeys.has(key)) return false;
+      const normalizedKey = String(key).toLowerCase();
+      return (
+        normalizedKey !== "url" &&
+        !normalizedKey.includes("http") &&
+        !normalizedKey.includes("رابط")
+      );
+    })
+  );
 
   if (!rows.length) return "";
   return rows
@@ -909,7 +987,11 @@ function renderDetails() {
 
     ${
       Object.keys(item.fields || {}).length
-        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-indigo-700">معلومات القطعة</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.fields)}</div>`
+        ? `<h3 class="mb-2 mt-5 text-lg font-extrabold text-indigo-700">معلومات القطعة</h3><div class="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2">${renderRows(item.fields, {
+            excludeKeys: String((item.fields && item.fields[MUSEUM_LOCATION_FIELD]) || "").trim()
+              ? new Set([MUSEUM_LOCATION_FIELD])
+              : new Set(),
+          })}</div>`
         : ""
     }
 
@@ -924,6 +1006,17 @@ function renderDetails() {
         <div id="itemDetailQrInline" class="mx-auto rounded-md bg-white leading-none" aria-hidden="true"></div>
       </div>
     </div>
+    ${
+      (() => {
+        const loc = String((item.fields && item.fields[MUSEUM_LOCATION_FIELD]) || "").trim();
+        if (!loc) return "";
+        return `<div class="mt-5 w-full min-w-0 rounded-2xl border border-teal-200/90 bg-gradient-to-br from-teal-50 to-emerald-50 p-3 shadow-sm sm:p-4">
+          <div class="mb-1 text-xs font-extrabold text-teal-800">${escapeHtml(MUSEUM_LOCATION_FIELD)}</div>
+          <div class="break-all font-mono text-base font-bold tracking-wide text-slate-800 sm:text-lg" dir="ltr">${escapeHtml(loc)}</div>
+          ${museumLocationLegendHtml()}
+        </div>`;
+      })()
+    }
   `;
 
   const qrSize = mainImage ? { width: 96, height: 96, colorDark: "#065f46" } : { width: 144, height: 144, colorDark: "#065f46" };
